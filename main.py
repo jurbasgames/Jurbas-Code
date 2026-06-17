@@ -26,6 +26,6 @@ while True:
         extra_body={"thinking": {"type": "enabled"}}
     )
 
-    reply = response.choices[0].message.content.strip()
+    reply = (response.choices[0].message.content or "").strip()
     print(f"AI: {reply}\n")
     messages.append({"role": "assistant", "content": reply})
