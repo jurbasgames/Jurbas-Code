@@ -13,6 +13,8 @@ while True:
     user_input = input("You: ").strip()
     if user_input.lower() in ("exit", "quit"):
         break
+    if not user_input:
+        continue
 
     messages.append({"role": "user", "content": user_input})
 
