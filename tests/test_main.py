@@ -8,8 +8,7 @@ import os
 class TestMain(unittest.TestCase):
     def setUp(self):
         # Force re-import of main for every test case so top-level code runs
-        if 'main' in sys.modules:
-            del sys.modules['main']
+        sys.modules.pop('main', None)
 
     @patch('os.environ.get')
     @patch('openai.OpenAI')
