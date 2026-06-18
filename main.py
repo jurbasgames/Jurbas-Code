@@ -101,12 +101,6 @@ TOOL_HANDLERS = {
     "write_file": lambda args: write_file(args["file_path"], args["content"]),
 }
 
-# ─── DeepSeek Client ───
-client = OpenAI(
-    api_key=os.environ.get("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com",
-)
-
 # ─── System Prompt ───
 SYSTEM_PROMPT = (
     "You are a terminal agent with SELF-MODIFICATION capability. "
@@ -184,79 +178,95 @@ tools = [
     },
 ]
 
-# ─── Initial history ───
-messages = [
-    {"role": "system", "content": SYSTEM_PROMPT}
-]
 
-# ─── Main loop ───
-while True:
-    user_input = input("You: ").strip()
-    if user_input.lower() in ("exit", "quit"):
-        break
-    if not user_input:
-        continue
+def main():
+    # ─── DeepSeek Client ───
+    client = OpenAI(
+        api_key=os.environ.get("DEEPSEEK_API_KEY"),
+        base_url="https://api.deepseek.com",
+    )
 
-    messages.append({"role": "user", "content": user_input})
+    # ─── Initial history ───
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT}
+    ]
 
-    # ── Tool call loop (allows multiple steps, bounded for safety) ──
-    for _step in range(MAX_TOOL_STEPS):
-        response = client.chat.completions.create(
-            model="deepseek-v4-flash",
-            messages=messages,
-            stream=False,
-            reasoning_effort="high",
-            extra_body={"thinking": {"type": "enabled"}},
-            tools=tools,
-            tool_choice="auto",
-        )
-
-        assistant_msg = response.choices[0].message
-        # Store as a plain dict so the history stays JSON-serializable.
-        messages.append(assistant_msg.model_dump(exclude_none=True))
-
-        finish = response.choices[0].finish_reason
-
-        if finish != "tool_calls":
-            reply = (assistant_msg.content or "").strip()
-            print(f"AI: {reply}\n")
+    # ─── Main loop ───
+    while True:
+        user_input = input("You: ").strip()
+        if user_input.lower() in ("exit", "quit"):
             break
+        if not user_input:
+            continue
 
-        for tool_call in assistant_msg.tool_calls:
-            name = tool_call.function.name
-            raw_args = tool_call.function.arguments
-            try:
-                args = json.loads(raw_args) if isinstance(
-                    raw_args, str) else raw_args
-            except json.JSONDecodeError as e:
-                print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
+        messages.append({"role": "user", "content": user_input})
+
+        # ── Tool call loop (allows multiple steps, bounded for safety) ──
+        for _step in range(MAX_TOOL_STEPS):
+            response = client.chat.completions.create(
+                model="deepseek-v4-flash",
+                messages=messages,
+                stream=False,
+                reasoning_effort="high",
+                extra_body={"thinking": {"type": "enabled"}},
+                tools=tools,
+                tool_choice="auto",
+            )
+
+            if not response.choices:
+                print("AI: Error: No response choices returned from the API.\n")
+                break
+
+            assistant_msg = response.choices[0].message
+            # Store as a plain dict so the history stays JSON-serializable.
+            messages.append(assistant_msg.model_dump(exclude_none=True))
+
+            finish = response.choices[0].finish_reason
+
+            if finish != "tool_calls":
+                reply = (assistant_msg.content or "").strip()
+                print(f"AI: {reply}\n")
+                break
+
+            for tool_call in assistant_msg.tool_calls:
+                name = tool_call.function.name
+                raw_args = tool_call.function.arguments
+                try:
+                    args = json.loads(raw_args) if isinstance(
+                        raw_args, str) else raw_args
+                except json.JSONDecodeError as e:
+                    print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": name,
+                        "content": f"Error: invalid JSON arguments: {e}",
+                    })
+                    continue
+                print(f"  🔧 [{name}] {args}")
+
+                handler = TOOL_HANDLERS.get(name)
+                if handler is None:
+                    result = f"Error: unknown tool '{name}'."
+                else:
+                    try:
+                        result = handler(args)
+                    except KeyError as e:
+                        result = f"Error: missing required argument {e} for tool '{name}'."
+                    except Exception as e:
+                        result = f"Error executing '{name}': {e}"
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "name": name,
-                    "content": f"Error: invalid JSON arguments: {e}",
+                    "content": result,
                 })
-                continue
-            print(f"  🔧 [{name}] {args}")
+        else:
+            # Loop exhausted without a final (non-tool) response.
+            print(
+                f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
 
-            handler = TOOL_HANDLERS.get(name)
-            if handler is None:
-                result = f"Error: unknown tool '{name}'."
-            else:
-                try:
-                    result = handler(args)
-                except KeyError as e:
-                    result = f"Error: missing required argument {e} for tool '{name}'."
-                except Exception as e:
-                    result = f"Error executing '{name}': {e}"
 
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "name": name,
-                "content": result,
-            })
-    else:
-        # Loop exhausted without a final (non-tool) response.
-        print(
-            f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
+if __name__ == '__main__':
+    main()
