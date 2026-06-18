@@ -1,10 +1,4 @@
 # Jurbas-Code
-## Running tests
-
-Run tests via uv:
-```bash
-uv run pytest
-```
 
 ## 2. 🔧 Expandir o conjunto de ferramentas
 
@@ -75,3 +69,10 @@ python main.py "Explique o arquivo ./src/utils.py"
 ```
 
 ---
+
+## Running tests
+
+Run tests via uv:
+```bash
+uv run pytest
+```

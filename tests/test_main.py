@@ -1,92 +1,198 @@
-import unittest
+import pytest
 from unittest.mock import patch, MagicMock
+import os
 import sys
-import os
+import shutil
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import os
 
-class TestMain(unittest.TestCase):
-    def setUp(self):
-        # Force re-import of main for every test case so top-level code runs
-        sys.modules.pop('main', None)
+import main
 
-    @patch('os.environ.get')
-    @patch('openai.OpenAI')
-    @patch('builtins.print')
-    def test_main_success(self, mock_print, mock_openai, mock_env_get):
-        # Setup mocks for a successful run
-        mock_env_get.return_value = 'test_api_key'
+# === TESTS FOR safe_path() ===
+def test_safe_path_allowed():
+    # Test path resolution inside ALLOWED_BASE
+    # mock abspath returning an allowed path
+    with patch('os.path.abspath', return_value=os.path.abspath(main.ALLOWED_BASE + "/test.txt")):
+         assert main.safe_path("test.txt") == os.path.abspath(main.ALLOWED_BASE + "/test.txt")
 
-        mock_client_instance = MagicMock()
-        mock_openai.return_value = mock_client_instance
+def test_safe_path_denied():
+    # Test path resolution outside ALLOWED_BASE
+    with patch('os.path.abspath', return_value="/tmp/test.txt"):
+        with pytest.raises(PermissionError) as exc_info:
+            main.safe_path("../../../tmp/test.txt")
+        assert "Path not allowed" in str(exc_info.value)
 
-        mock_response = MagicMock()
-        mock_response.choices[0].message.content = "Mocked response"
-        mock_client_instance.chat.completions.create.return_value = mock_response
+# === TESTS FOR read_file() ===
+@patch('main.safe_path')
+@patch('os.path.exists')
+@patch('builtins.open', new_callable=MagicMock)
+def test_read_file_success(mock_open, mock_exists, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = True
 
-        # Act
-        import main
+    # Mocking open().read()
+    mock_file = MagicMock()
+    mock_file.read.return_value = "file content"
+    mock_open.return_value.__enter__.return_value = mock_file
 
-        # Verify
-        mock_env_get.assert_called_with('DEEPSEEK_API_KEY')
-        mock_openai.assert_called_once_with(
-            api_key='test_api_key',
-            base_url="https://api.deepseek.com"
-        )
+    assert main.read_file("test.txt") == "file content"
+    mock_open.assert_called_once_with("/allowed/test.txt", "r", encoding="utf-8")
 
-        mock_client_instance.chat.completions.create.assert_called_once_with(
-            model="deepseek-v4-pro",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant"},
-                {"role": "user", "content": "Hello"},
-            ],
-            stream=False,
-            reasoning_effort="high",
-            extra_body={"thinking": {"type": "enabled"}}
-        )
+@patch('main.safe_path')
+def test_read_file_permission_error(mock_safe_path):
+    mock_safe_path.side_effect = PermissionError("Path not allowed: test.txt")
+    assert "Error: Path not allowed: test.txt" in main.read_file("test.txt")
 
-        mock_print.assert_called_once_with("Mocked response")
+@patch('main.safe_path')
+@patch('os.path.exists')
+def test_read_file_not_found(mock_exists, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = False
+    assert "Error: file 'test.txt' not found." in main.read_file("test.txt")
 
-    @patch('os.environ.get')
-    @patch('openai.OpenAI')
-    @patch('builtins.print')
-    def test_main_missing_api_key(self, mock_print, mock_openai, mock_env_get):
-        # Setup mocks for missing API key
-        mock_env_get.return_value = None
+# === TESTS FOR list_directory() ===
+@patch('main.safe_path')
+@patch('os.path.exists')
+@patch('os.path.isdir')
+@patch('os.listdir')
+@patch('os.path.getsize')
+def test_list_directory_success(mock_getsize, mock_listdir, mock_isdir, mock_exists, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/dir"
+    mock_exists.return_value = True
 
-        mock_client_instance = MagicMock()
-        mock_openai.return_value = mock_client_instance
+    # Let os.path.isdir return True for the directory itself, and decide for items
+    def isdir_side_effect(path):
+        if path == "/allowed/dir": return True
+        if path.endswith("subdir"): return True
+        return False
+    mock_isdir.side_effect = isdir_side_effect
 
-        # Act
-        import main
+    mock_listdir.return_value = ["file1.txt", "subdir"]
+    mock_getsize.return_value = 1024 # 1.0 KB
 
-        # Verify
-        mock_env_get.assert_called_with('DEEPSEEK_API_KEY')
-        mock_openai.assert_called_once_with(
-            api_key=None,
-            base_url="https://api.deepseek.com"
-        )
+    result = main.list_directory("dir")
 
-    @patch('os.environ.get')
-    @patch('openai.OpenAI')
-    @patch('builtins.print')
-    def test_main_api_exception(self, mock_print, mock_openai, mock_env_get):
-        # Setup mocks for API exception
-        mock_env_get.return_value = 'test_api_key'
+    assert "Contents of 'dir' (2 items):" in result
+    assert "[FILE] file1.txt (1.0 KB)" in result
+    assert "[DIR] subdir" in result
 
-        mock_client_instance = MagicMock()
-        mock_openai.return_value = mock_client_instance
+@patch('main.safe_path')
+def test_list_directory_permission_error(mock_safe_path):
+    mock_safe_path.side_effect = PermissionError("Path not allowed")
+    assert "Error: Path not allowed" in main.list_directory("dir")
 
-        # Make the API call raise an exception
-        mock_client_instance.chat.completions.create.side_effect = Exception("API Error")
+@patch('main.safe_path')
+@patch('os.path.exists')
+def test_list_directory_not_found(mock_exists, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/dir"
+    mock_exists.return_value = False
+    assert "Error: directory 'dir' not found." in main.list_directory("dir")
 
-        # Act & Verify
-        with self.assertRaises(Exception) as context:
-            import main
+@patch('main.safe_path')
+@patch('os.path.exists')
+@patch('os.path.isdir')
+def test_list_directory_not_a_dir(mock_isdir, mock_exists, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/file.txt"
+    mock_exists.return_value = True
+    mock_isdir.return_value = False
+    assert "Error: 'file.txt' is not a directory." in main.list_directory("file.txt")
 
-        self.assertEqual(str(context.exception), "API Error")
+# === TESTS FOR write_file() ===
+@patch('main.safe_path')
+@patch('os.makedirs')
+@patch('os.path.exists')
+@patch('shutil.copy2')
+@patch('os.path.getsize')
+@patch('builtins.open', new_callable=MagicMock)
+def test_write_file_success(mock_open, mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = False # No backup needed
+    mock_getsize.return_value = 12
 
-        mock_print.assert_not_called()
+    mock_file = MagicMock()
+    mock_open.return_value.__enter__.return_value = mock_file
 
-if __name__ == '__main__':
-    unittest.main()
+    result = main.write_file("test.txt", "file content")
+
+    mock_makedirs.assert_called_once_with("/allowed", exist_ok=True)
+    mock_open.assert_called_once_with("/allowed/test.txt", "w", encoding="utf-8")
+    mock_file.write.assert_called_once_with("file content")
+    mock_copy2.assert_not_called()
+    assert "written successfully (12 bytes)" in result
+
+@patch('main.safe_path')
+@patch('os.makedirs')
+@patch('os.path.exists')
+@patch('shutil.copy2')
+@patch('os.path.getsize')
+@patch('builtins.open', new_callable=MagicMock)
+def test_write_file_with_backup(mock_open, mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = True # Needs backup
+    mock_getsize.return_value = 12
+
+    mock_file = MagicMock()
+    mock_open.return_value.__enter__.return_value = mock_file
+
+    result = main.write_file("test.txt", "file content")
+
+    mock_copy2.assert_called_once_with("/allowed/test.txt", "/allowed/test.txt.bak")
+    assert "previous version backed up to 'test.txt.bak'" in result
+
+@patch('main.safe_path')
+def test_write_file_permission_error(mock_safe_path):
+    mock_safe_path.side_effect = PermissionError("Path not allowed")
+    assert "Error: Path not allowed" in main.write_file("test.txt", "content")
+
+# === TESTS FOR main() ===
+@patch('main.OpenAI')
+@patch('builtins.input')
+@patch('builtins.print')
+def test_main_loop_exit(mock_print, mock_input, mock_openai):
+    # Setup to exit immediately
+    mock_input.return_value = "exit"
+
+    main.main()
+
+    mock_openai.assert_called_once()
+    mock_print.assert_not_called()
+
+@patch('main.OpenAI')
+@patch('builtins.input')
+@patch('builtins.print')
+@patch('main.read_file')
+def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_openai):
+    # Input first iteration "do something", second iteration "quit"
+    mock_input.side_effect = ["read something", "quit"]
+
+    # Setup OpenAI client mock
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+
+    # First response: tool call
+    mock_response_1 = MagicMock()
+    mock_response_1.choices[0].finish_reason = "tool_calls"
+    mock_tool_call = MagicMock()
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
+    mock_tool_call.id = "call_123"
+    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
+    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
+
+    # Second response (after tool result): final text
+    mock_response_2 = MagicMock()
+    mock_response_2.choices[0].finish_reason = "stop"
+    mock_response_2.choices[0].message.content = "Here is the content"
+    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
+
+    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+
+    # Setup tool mock
+    mock_read_file.return_value = "mocked file content"
+
+    main.main()
+
+    # Check if tool was actually called
+    mock_read_file.assert_called_once_with("test.txt")
+
+    # Check if AI's final text was printed
+    mock_print.assert_any_call("AI: Here is the content\n")
