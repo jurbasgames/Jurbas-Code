@@ -17,6 +17,11 @@ response = client.chat.completions.create(
 )
 
 for chunk in response:
-    if chunk.choices and chunk.choices[0].delta.content is not None:
-        print(chunk.choices[0].delta.content, end="", flush=True)
+    if chunk.choices:
+        delta = chunk.choices[0].delta
+        reasoning = getattr(delta, "reasoning_content", None)
+        if reasoning:
+            print(reasoning, end="", flush=True)
+        elif delta.content is not None:
+            print(delta.content, end="", flush=True)
 print()
