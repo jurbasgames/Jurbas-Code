@@ -20,7 +20,10 @@ try:
         extra_body={"thinking": {"type": "enabled"}}
     )
 
-    print(response.choices[0].message.content)
+    if response.choices:
+        print(response.choices[0].message.content)
+    else:
+        logging.warning("No choices returned in the response.")
 except OpenAIError as e:
     logging.error(f"API error occurred: {e}")
 except Exception as e:
