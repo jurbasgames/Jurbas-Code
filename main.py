@@ -18,7 +18,10 @@ def main():
         extra_body={"thinking": {"type": "enabled"}}
     )
 
-    print(response.choices[0].message.content)
+    if response.choices:
+        print(response.choices[0].message.content)
+    else:
+        print("Error: No response choices returned from the API.")
 
 if __name__ == '__main__':
     main()
