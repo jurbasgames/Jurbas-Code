@@ -1,14 +1,20 @@
 import json
 import os
+import shutil
 from openai import OpenAI
 
 # ─── Security configuration ───
-ALLOWED_BASE = os.path.abspath("./")
+ALLOWED_BASE = os.path.realpath("./")
+MAX_TOOL_STEPS = 25  # safety cap on consecutive tool-call iterations
 
 
 def safe_path(file_path: str) -> str:
-    """Resolves and validates a path within the allowed directory."""
-    full = os.path.abspath(file_path)
+    """Resolves and validates a path within the allowed directory.
+
+    Uses realpath so that symlinks are resolved before the boundary check,
+    preventing a symlink inside the project from pointing outside it.
+    """
+    full = os.path.realpath(file_path)
     if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
         raise PermissionError(f"Path not allowed: {file_path}")
     return full
@@ -73,10 +79,17 @@ def write_file(file_path: str, content: str) -> str:
         return f"Error: {e}"
     try:
         os.makedirs(os.path.dirname(full), exist_ok=True)
+        # Back up an existing file before overwriting so a bad generation
+        # (e.g. self-modifying main.py) can be recovered.
+        backup_note = ""
+        if os.path.exists(full):
+            backup = full + ".bak"
+            shutil.copy2(full, backup)
+            backup_note = f" (previous version backed up to '{os.path.basename(backup)}')"
         with open(full, "w", encoding="utf-8") as f:
             f.write(content)
         size = os.path.getsize(full)
-        return f"File '{file_path}' written successfully ({size} bytes)."
+        return f"File '{file_path}' written successfully ({size} bytes).{backup_note}"
     except Exception as e:
         return f"Error writing file: {e}"
 
@@ -186,10 +199,10 @@ while True:
 
     messages.append({"role": "user", "content": user_input})
 
-    # ── Tool call loop (allows multiple steps) ──
-    while True:
+    # ── Tool call loop (allows multiple steps, bounded for safety) ──
+    for _step in range(MAX_TOOL_STEPS):
         response = client.chat.completions.create(
-            model="deepseek-v4-pro",
+            model="deepseek-v4-flash",
             messages=messages,
             stream=False,
             reasoning_effort="high",
@@ -199,44 +212,51 @@ while True:
         )
 
         assistant_msg = response.choices[0].message
-        messages.append(assistant_msg)
+        # Store as a plain dict so the history stays JSON-serializable.
+        messages.append(assistant_msg.model_dump(exclude_none=True))
 
         finish = response.choices[0].finish_reason
 
-        if finish == "tool_calls":
-            for tool_call in assistant_msg.tool_calls:
-                name = tool_call.function.name
-                raw_args = tool_call.function.arguments
-                try:
-                    args = json.loads(raw_args) if isinstance(
-                        raw_args, str) else raw_args
-                except json.JSONDecodeError as e:
-                    print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": name,
-                        "content": f"Error: invalid JSON arguments: {e}",
-                    })
-                    continue
-                print(f"  🔧 [{name}] {args}")
+        if finish != "tool_calls":
+            reply = (assistant_msg.content or "").strip()
+            print(f"AI: {reply}\n")
+            break
 
-                handler = TOOL_HANDLERS.get(name)
-                try:
-                    result = handler(args)
-                except:
-                    result = f"Error: unknown tool '{name}'."
-
+        for tool_call in assistant_msg.tool_calls:
+            name = tool_call.function.name
+            raw_args = tool_call.function.arguments
+            try:
+                args = json.loads(raw_args) if isinstance(
+                    raw_args, str) else raw_args
+            except json.JSONDecodeError as e:
+                print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "name": name,
-                    "content": result,
+                    "content": f"Error: invalid JSON arguments: {e}",
                 })
+                continue
+            print(f"  🔧 [{name}] {args}")
 
-            continue
+            handler = TOOL_HANDLERS.get(name)
+            if handler is None:
+                result = f"Error: unknown tool '{name}'."
+            else:
+                try:
+                    result = handler(args)
+                except KeyError as e:
+                    result = f"Error: missing required argument {e} for tool '{name}'."
+                except Exception as e:
+                    result = f"Error executing '{name}': {e}"
 
-        else:
-            reply = (assistant_msg.content or "").strip()
-            print(f"AI: {reply}\n")
-            break
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "name": name,
+                "content": result,
+            })
+    else:
+        # Loop exhausted without a final (non-tool) response.
+        print(
+            f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
