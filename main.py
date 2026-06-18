@@ -11,9 +11,12 @@ response = client.chat.completions.create(
         {"role": "system", "content": "You are a helpful assistant"},
         {"role": "user", "content": "Hello"},
     ],
-    stream=False,
+    stream=True,
     reasoning_effort="high",
     extra_body={"thinking": {"type": "enabled"}}
 )
 
-print(response.choices[0].message.content)
+for chunk in response:
+    if chunk.choices and chunk.choices[0].delta.content is not None:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+print()
