@@ -48,13 +48,17 @@ def list_directory(dir_path: str) -> str:
             kind = "DIR" if os.path.isdir(item_path) else "FILE"
             size = ""
             if kind == "FILE":
-                size_bytes = os.path.getsize(item_path)
-                if size_bytes < 1024:
-                    size = f" ({size_bytes} B)"
-                elif size_bytes < 1024 * 1024:
-                    size = f" ({size_bytes / 1024:.1f} KB)"
-                else:
-                    size = f" ({size_bytes / 1024 / 1024:.1f} MB)"
+                try:
+                    size_bytes = os.path.getsize(item_path)
+                    if size_bytes < 1024:
+                        size = f" ({size_bytes} B)"
+                    elif size_bytes < 1024 * 1024:
+                        size = f" ({size_bytes / 1024:.1f} KB)"
+                    else:
+                        size = f" ({size_bytes / 1024 / 1024:.1f} MB)"
+                except OSError:
+                    size = " (unknown size)"
+
             items.append(f"  [{kind}] {name}{size}")
         return f"Contents of '{dir_path}' ({len(items)} items):\n" + "\n".join(items)
     except Exception as e:
