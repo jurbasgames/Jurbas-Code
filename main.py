@@ -209,9 +209,9 @@ while True:
                 print(f"  🔧 [{name}] {args}")
 
                 handler = TOOL_HANDLERS.get(name)
-                if handler:
+                try:
                     result = handler(args)
-                else:
+                except:
                     result = f"Error: unknown tool '{name}'."
 
                 messages.append({
