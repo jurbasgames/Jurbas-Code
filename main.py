@@ -9,7 +9,7 @@ ALLOWED_BASE = os.path.abspath("./")
 def safe_path(file_path: str) -> str:
     """Resolves and validates a path within the allowed directory."""
     full = os.path.abspath(file_path)
-    if not full.startswith(ALLOWED_BASE):
+    if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
         raise PermissionError(f"Path not allowed: {file_path}")
     return full
 
