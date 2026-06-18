@@ -207,9 +207,18 @@ while True:
             for tool_call in assistant_msg.tool_calls:
                 name = tool_call.function.name
                 raw_args = tool_call.function.arguments
-                args = json.loads(raw_args) if isinstance(
-                    raw_args, str) else raw_args
-
+                try:
+                    args = json.loads(raw_args) if isinstance(
+                        raw_args, str) else raw_args
+                except json.JSONDecodeError as e:
+                    print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": name,
+                        "content": f"Error: invalid JSON arguments: {e}",
+                    })
+                    continue
                 print(f"  🔧 [{name}] {args}")
 
                 handler = TOOL_HANDLERS.get(name)
