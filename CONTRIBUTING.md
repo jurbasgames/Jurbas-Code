@@ -47,6 +47,16 @@ Based on [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#s
 - Make sure all tests pass before opening a PR.
 - New tests are welcome and encouraged!
 
+### 📦 Dependencies
+
+Install all dependencies (including dev/test tools) with:
+
+```bash
+uv sync --all-extras
+```
+
+---
+
 ## 🐍 Code style
 
 - **Ponytail** — https://github.com/DietrichGebert/ponytail
@@ -60,11 +70,13 @@ Based on [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#s
 
 ## 🛡️ Security
 
-- Every write/remove operation uses paths validated by `safe_path()`.
-- Shell commands go through a security blacklist (`DANGEROUS_PATTERNS`).
-- Mutating actions (write_file, dangerous commands) require user confirmation.
-- Always respect the sandbox (`ALLOWED_BASE`).
+- Every file operation uses paths validated by `safe_path()`, which resolves symlinks and enforces a boundary check against `ALLOWED_BASE`.
+- Existing files are automatically backed up with a `.bak` suffix before being overwritten.
+- Always respect the project sandbox (`ALLOWED_BASE`).
+
+> [!NOTE]
+> Additional security features (command blacklist, confirmation gate for mutating actions, shell command sandboxing) are planned — see the roadmap and open PRs for progress.
 
 ## ❓ Questions?
 
-Open an issue or ask directly in the PR. We're here to help!
+Open an issue or ask directly in the PR. We're just a conversation away!

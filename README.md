@@ -39,7 +39,6 @@ Check the full guide in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ### 1. 🔧 Expand the tool set
 
-
 | Tool | Description |
 |---|---|
 | `web_search` | Search the internet |
@@ -66,7 +65,7 @@ for chunk in response:
 
 ---
 
-### 5. ⚙️ Configuration file
+### 4. ⚙️ Configuration file
 
 Externalize API key, model, system prompt and parameters to a `.env` + `config.yaml`:
 
@@ -78,13 +77,13 @@ tools_enabled: ["read_file", "write_file", "list_directory"]
 
 ---
 
-### 7. 🛡️ Security and sandboxing
+### 5. 🛡️ Security and sandboxing
 
 - Sandboxing and YOLO mode
 
 ---
 
-### 8. 🧩 Non-interactive mode
+### 6. 🧩 Non-interactive mode
 
 Allow receiving a prompt directly from the command line:
 
