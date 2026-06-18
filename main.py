@@ -4,9 +4,11 @@ from openai import OpenAI, OpenAIError
 
 logging.basicConfig(level=logging.INFO)
 
-client = OpenAI(
-    api_key=os.environ.get('DEEPSEEK_API_KEY'),
-    base_url="https://api.deepseek.com")
+def main():
+    client = OpenAI(
+        api_key=os.environ.get('DEEPSEEK_API_KEY'),
+        base_url="https://api.deepseek.com"
+    )
 
 try:
     response = client.chat.completions.create(
@@ -28,3 +30,7 @@ except OpenAIError as e:
     logging.error(f"API error occurred: {e}")
 except Exception as e:
     logging.error(f"An unexpected error occurred: {e}")
+        print("Error: No response choices returned from the API.")
+
+if __name__ == '__main__':
+    main()
