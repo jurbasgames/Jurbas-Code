@@ -23,19 +23,26 @@ Sem argumentos, o prompt padrão é `Hello`.
 Não usa créditos da API. Em vez disso, usa o token OAuth da sua assinatura
 (a mesma consumida pelo Claude Code).
 
-1. Gere o token (uma vez), com o Claude Code instalado e logado na assinatura:
+Basta estar logado no Claude Code. O script lê automaticamente as credenciais
+de `~/.claude/.credentials.json` (campo `claudeAiOauth.accessToken`):
+
+1. Faça login na assinatura (uma vez), com o Claude Code instalado:
 
    ```sh
-   claude setup-token
+   claude
    ```
 
-2. Coloque o token no `.env` (carregado automaticamente via `python-dotenv`):
+   Isso grava/atualiza `~/.claude/.credentials.json`. Se o token expirar,
+   rode `claude` novamente para renovar.
+
+2. (Opcional) Override manual via variável de ambiente — tem prioridade
+   sobre o arquivo de credenciais:
 
    ```sh
-   CLAUDE_CODE_OAUTH_TOKEN=<token-gerado>
+   export CLAUDE_CODE_OAUTH_TOKEN=<token-gerado-com-claude-setup-token>
    ```
 
-   Ou exporte no ambiente: `export CLAUDE_CODE_OAUTH_TOKEN=<token-gerado>`.
+   Para usar outro diretório de config, defina `CLAUDE_CONFIG_DIR`.
 
 O cliente envia o token como `Authorization: Bearer` junto do header beta
 `oauth-2025-04-20`. Como esse token é escopado ao Claude Code, o script

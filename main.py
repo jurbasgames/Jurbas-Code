@@ -1,5 +1,8 @@
+import json
 import os
 import sys
+import time
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -44,15 +47,57 @@ def stream_deepseek(system, prompt):
             yield delta.content
 
 
+def claude_config_dir():
+    """Diretorio de config do Claude Code (~/.claude, ou CLAUDE_CONFIG_DIR)."""
+    override = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(override) if override else Path.home() / ".claude"
+
+
+def load_claude_code_token():
+    """Le o access token OAuth de ~/.claude/.credentials.json.
+
+    Esse e o token da assinatura do Claude Code, gravado ao logar com
+    `claude` (campo claudeAiOauth.accessToken). Retorna None se ausente.
+    """
+    creds_path = claude_config_dir() / ".credentials.json"
+    try:
+        data = json.loads(creds_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Aviso: nao foi possivel ler {creds_path}: {exc}", file=sys.stderr)
+        return None
+
+    oauth = data.get("claudeAiOauth") or {}
+    token = oauth.get("accessToken")
+    if not token:
+        return None
+
+    # expiresAt vem em milissegundos; avisa (mas nao bloqueia) se expirado.
+    expires_at = oauth.get("expiresAt")
+    if isinstance(expires_at, (int, float)) and expires_at / 1000 < time.time():
+        print(
+            "Aviso: o token do Claude Code em ~/.claude parece expirado. "
+            "Rode `claude` para renovar a sessao.",
+            file=sys.stderr,
+        )
+    return token
+
+
+def resolve_claude_token():
+    """CLAUDE_CODE_OAUTH_TOKEN (override) ou as credenciais de ~/.claude."""
+    return os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or load_claude_code_token()
+
+
 def stream_claude(system, prompt):
     """Claude usando a assinatura do Claude Code (token OAuth, não API key)."""
     import anthropic
 
-    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    token = resolve_claude_token()
     if not token:
         raise RuntimeError(
-            "Defina CLAUDE_CODE_OAUTH_TOKEN com o token da sua assinatura do "
-            "Claude Code. Gere com: claude setup-token"
+            "Nao encontrei credenciais do Claude Code. Faca login com `claude` "
+            "(gera ~/.claude/.credentials.json) ou defina CLAUDE_CODE_OAUTH_TOKEN."
         )
 
     # auth_token -> Authorization: Bearer <token>; o header beta habilita OAuth.
