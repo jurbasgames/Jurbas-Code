@@ -4,7 +4,7 @@ import shutil
 from openai import OpenAI
 
 # ─── Security configuration ───
-ALLOWED_BASE = os.path.realpath("./")
+ALLOWED_BASE = os.path.realpath(os.path.dirname(__file__))
 MAX_TOOL_STEPS = 25  # safety cap on consecutive tool-call iterations
 
 
@@ -180,6 +180,22 @@ tools = [
 
 
 def main():
+    # ─── Load .env if it exists ───
+    if os.path.exists(".env"):
+        with open(".env", "r", encoding="utf-8") as env_file:
+            for line in env_file:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip()
+                    # Remove quotes if present
+                    if val.startswith(('"', "'")) and val.endswith(('"', "'")):
+                        val = val[1:-1]
+                    os.environ.setdefault(key, val)
+
     # ─── DeepSeek Client ───
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
@@ -248,6 +264,10 @@ def main():
                 handler = TOOL_HANDLERS.get(name)
                 if handler is None:
                     result = f"Error: unknown tool '{name}'."
+                elif name == "read_file" and ".env" in args.get("file_path", ""):
+                    # Never read .env into the model context — it holds secrets
+                    # (API keys). Redact before touching the file at all.
+                    result = "<REDACTED: .env content is hidden from model for security>"
                 else:
                     try:
                         result = handler(args)
