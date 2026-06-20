@@ -38,10 +38,10 @@ def _is_dangerous(command: str) -> str | None:
     """Check if a command contains blacklisted patterns. Returns a reason or None."""
     lower = command.lower().strip()
     for pattern in DANGEROUS_PATTERNS:
-        if lower.startswith(pattern):
+        if pattern in lower:
             return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
     # Block pipe-to-dangerous destinations
-    if re.search(r'\|\s*(sudo|sh|bash)\s', lower):
+    if re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
         return "Piping to sudo/sh/bash is blocked for security."
     return None
 
@@ -67,8 +67,10 @@ def _is_readonly_bash(command: str) -> bool:
     unknown commands) returns False so it gets gated behind a confirmation prompt
     instead of running unattended.
     """
+    if not isinstance(command, str):
+        return False
     cmd = command.strip()
-    if not cmd or any(op in cmd for op in SHELL_OPERATORS):
+    if not cmd or any(op in cmd for op in SHELL_OPERATORS) or "\n" in cmd or "\r" in cmd:
         return False
     tokens = cmd.split()
     if any(t in MUTATING_FLAGS for t in tokens):
@@ -82,10 +84,12 @@ def _is_readonly_bash(command: str) -> bool:
 
 def _requires_confirmation(name: str, args) -> bool:
     """Decide whether a tool call needs explicit user approval before running."""
+    if not isinstance(args, dict):
+        return True
     if name == "write_file":
         return True
     if name == "run_bash":
-        command = args.get("command", "") if isinstance(args, dict) else ""
+        command = args.get("command", "")
         return not _is_readonly_bash(command)
     return False
 
@@ -192,6 +196,9 @@ def run_bash(command: str) -> str:
 
     Dangerous commands (rm -rf /, sudo, mkfs, etc.) are blocked for safety.
     """
+    if not isinstance(command, str):
+        return "Error: command must be a string."
+
     # Security check
     reason = _is_dangerous(command)
     if reason:
@@ -321,7 +328,7 @@ tools = [
             "description": (
                 "Execute a bash command inside the project directory. "
                 "Use for git operations, running scripts, listing files, installing packages, etc. "
-                "Timeout is 30s. Dangerous commands are blocked."
+                f"Timeout is {BASH_TIMEOUT}s. Dangerous commands are blocked."
             ),
             "parameters": {
                 "type": "object",
@@ -394,7 +401,9 @@ def main():
                 try:
                     args = json.loads(raw_args) if isinstance(
                         raw_args, str) else raw_args
-                except json.JSONDecodeError as e:
+                    if not isinstance(args, dict):
+                        raise ValueError("tool arguments must be a JSON object")
+                except (json.JSONDecodeError, ValueError) as e:
                     print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
                     messages.append({
                         "role": "tool",
