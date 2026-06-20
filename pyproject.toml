@@ -10,3 +10,8 @@ dependencies = [
     "openai>=2.42.0",
     "python-dotenv>=1.0.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]

@@ -1,63 +1,161 @@
 # Jurbas-Code
 
-Script de chat por streaming com suporte a **múltiplos providers** de LLM.
+[![Contribute](https://img.shields.io/badge/contribute-CONTRIBUTING.md-blue)](CONTRIBUTING.md)
 
-Providers disponíveis:
+An AI terminal agent with streaming support and multiple LLM providers. It is designed to evolve toward a self-evolving, self-benchmarking agent with data-driven self-analysis and human feedback — not just perception-based. Inspired by Hermes from Nous Research.
 
-- `claude` (padrão) — usa a **assinatura do Claude Code** (token OAuth), não a API key paga por token.
-- `deepseek` — usa a API da DeepSeek via SDK compatível com OpenAI.
+---
 
-## Seleção de provider
+## 🚀 Getting Started
 
-Defina a variável `LLM_PROVIDER` (padrão: `claude`):
+```bash
+# Clone the repository
+git clone https://github.com/jurbasgames/Jurbas-Code.git
+cd Jurbas-Code
 
-```sh
-LLM_PROVIDER=claude   uv run main.py "Sua pergunta aqui"
-LLM_PROVIDER=deepseek uv run main.py "Sua pergunta aqui"
+# Install dependencies
+uv sync --all-extras
+
+# Configure DeepSeek if you want the DeepSeek provider
+echo "DEEPSEEK_API_KEY=your-key-here" > .env
+
+# Run with the default provider (claude)
+uv run main.py "Hello"
 ```
 
-Sem argumentos, o prompt padrão é `Hello`.
+## Providers
 
-## Provider `claude` — assinatura do Claude Code
+Available providers:
 
-Não usa créditos da API. Em vez disso, usa o token OAuth da sua assinatura
-(a mesma consumida pelo Claude Code).
+- `claude` (default) — uses your **Claude Code subscription** OAuth token, not Anthropic API-key billing.
+- `deepseek` — uses DeepSeek's OpenAI-compatible API.
 
-Basta estar logado no Claude Code. O script lê automaticamente as credenciais
-de `~/.claude/.credentials.json` (campo `claudeAiOauth.accessToken`):
+Select the provider with `LLM_PROVIDER`:
 
-1. Faça login na assinatura (uma vez), com o Claude Code instalado:
+```bash
+LLM_PROVIDER=claude   uv run main.py "Your prompt here"
+LLM_PROVIDER=deepseek uv run main.py "Your prompt here"
+```
 
-   ```sh
-   claude
-   ```
+If no prompt argument is provided, the default prompt is `Hello`.
 
-   Isso grava/atualiza `~/.claude/.credentials.json`. Se o token expirar,
-   rode `claude` novamente para renovar.
+## Provider `claude` — Claude Code subscription
 
-2. (Opcional) Override manual via variável de ambiente — tem prioridade
-   sobre o arquivo de credenciais:
+This path does **not** use Anthropic API credits. It reads the OAuth token created by the official Claude Code CLI login:
 
-   ```sh
-   export CLAUDE_CODE_OAUTH_TOKEN=<token-gerado-com-claude-setup-token>
-   ```
+```bash
+claude
+```
 
-   Para usar outro diretório de config, defina `CLAUDE_CONFIG_DIR`.
+The token is loaded from:
 
-O cliente envia o token como `Authorization: Bearer` junto do header beta
-`oauth-2025-04-20`. Como esse token é escopado ao Claude Code, o script
-prefixa a identidade do Claude Code no system prompt para a Messages API
-aceitar a chamada.
+```text
+~/.claude/.credentials.json
+```
+
+Specifically:
+
+```text
+claudeAiOauth.accessToken
+```
+
+Optional overrides:
+
+```bash
+export CLAUDE_CODE_OAUTH_TOKEN=<token>
+export CLAUDE_CONFIG_DIR=<path-to-claude-config-dir>
+```
+
+Important billing guardrail:
+
+```bash
+unset ANTHROPIC_API_KEY
+```
+
+The Claude provider refuses to run if `ANTHROPIC_API_KEY` is set, because this provider is intended to route through Claude Code subscription auth with `x-app: cli`.
 
 ## Provider `deepseek`
 
-```sh
-export DEEPSEEK_API_KEY=<sua-key>
-LLM_PROVIDER=deepseek uv run main.py
+```bash
+export DEEPSEEK_API_KEY=<your-key>
+LLM_PROVIDER=deepseek uv run main.py "Hello"
 ```
 
-## Rodando
+## 🧪 Tests
 
-```sh
-uv run main.py "Olá, tudo bem?"
+```bash
+uv run pytest
 ```
+
+Useful focused checks:
+
+```bash
+uv run python -m py_compile main.py tests/test_claude_code_headers.py
+uv run python -m unittest -v tests/test_claude_code_headers.py
+uv run --with pytest pytest -q
+```
+
+## 🤝 How to Contribute
+
+Check the full guide in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## 📋 Roadmap
+
+### 1. 🔧 Expand the tool set
+
+| Tool | Description |
+|---|---|
+| `web_search` | Search the internet |
+
+---
+
+### 2. 📜 Streaming support
+
+Streaming is supported by the provider paths so text appears token by token instead of waiting for full response completion.
+
+---
+
+### 3. 🪵 Logging and persistence system
+
+- Replace `print` with logging levels (DEBUG, INFO, ERROR).
+- Save conversation history to a file (e.g. `history.json`) to continue between sessions.
+- Handle **token limits**: truncate or summarize old messages.
+
+---
+
+### 4. ⚙️ Configuration file
+
+Externalize API key, model, system prompt and parameters to a `.env` + `config.yaml`:
+
+```yaml
+model: "deepseek-v4-pro"
+reasoning_effort: "high"
+tools_enabled: ["read_file", "write_file", "list_directory"]
+```
+
+---
+
+### 5. 🛡️ Security and sandboxing
+
+- Sandboxing and YOLO mode
+- Explicit billing guardrails for subscription-backed providers
+
+---
+
+### 6. 🧩 Non-interactive mode
+
+Allow receiving a prompt directly from the command line:
+
+```bash
+uv run main.py "Explain the file ./src/utils.py"
+```
+
+---
+
+### Compression skills
+
+### Auto Benchmarking
+
+### Memory system with Mnemosyne
