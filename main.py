@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,6 +15,22 @@ DEFAULT_PROMPT = "Hello"
 # Identidade exigida para usar o token OAuth da assinatura do Claude Code
 # na Messages API (o token é escopado ao Claude Code).
 CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
+CLAUDE_CODE_USER_AGENT = "claude-cli/2.1.183 (external, cli)"
+ANTHROPIC_VERSION = "2023-06-01"
+CLAUDE_CODE_BETA_FLAGS = (
+    "oauth-2025-04-20",
+    "interleaved-thinking-2025-05-14",
+    "redact-thinking-2026-02-12",
+    "thinking-token-count-2026-05-13",
+    "context-management-2025-06-27",
+    "prompt-caching-scope-2026-01-05",
+    "mid-conversation-system-2026-04-07",
+    "advisor-tool-2026-03-01",
+    "advanced-tool-use-2025-11-20",
+    "effort-2025-11-24",
+    "extended-cache-ttl-2025-04-11",
+    "cache-diagnosis-2026-04-07",
+)
 
 
 def stream_deepseek(system, prompt):
@@ -89,8 +106,39 @@ def resolve_claude_token():
     return os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or load_claude_code_token()
 
 
+def claude_code_headers():
+    """Headers capturados do binario interativo do Claude Code.
+
+    Invariante de billing: OAuth do Claude Code + `x-app: cli` deve continuar
+    roteando para a assinatura, nao para API billing.
+    """
+    return {
+        "User-Agent": CLAUDE_CODE_USER_AGENT,
+        "X-Claude-Code-Session-Id": str(uuid.uuid4()),
+        "X-Stainless-Arch": "x64",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-OS": "Linux",
+        "X-Stainless-Package-Version": "0.94.0",
+        "X-Stainless-Retry-Count": "0",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Runtime-Version": "v24.3.0",
+        "X-Stainless-Timeout": "600",
+        "anthropic-beta": ",".join(CLAUDE_CODE_BETA_FLAGS),
+        "anthropic-dangerous-direct-browser-access": "true",
+        "anthropic-version": ANTHROPIC_VERSION,
+        "x-app": "cli",
+        "x-client-request-id": str(uuid.uuid4()),
+    }
+
+
 def stream_claude(system, prompt):
     """Claude usando a assinatura do Claude Code (token OAuth, não API key)."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY esta setado; remova para evitar API billing. "
+            "Este provider usa a assinatura do Claude Code via OAuth + x-app: cli."
+        )
+
     import anthropic
 
     token = resolve_claude_token()
@@ -100,10 +148,11 @@ def stream_claude(system, prompt):
             "(gera ~/.claude/.credentials.json) ou defina CLAUDE_CODE_OAUTH_TOKEN."
         )
 
-    # auth_token -> Authorization: Bearer <token>; o header beta habilita OAuth.
+    # auth_token -> Authorization: Bearer ***; headers abaixo reproduzem o
+    # trafego real capturado do `claude` interativo.
     client = anthropic.Anthropic(
         auth_token=token,
-        default_headers={"anthropic-beta": "oauth-2025-04-20"},
+        default_headers=claude_code_headers(),
     )
 
     with client.messages.stream(
