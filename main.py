@@ -186,10 +186,11 @@ def main():
         base_url="https://api.deepseek.com",
     )
 
-    # ─── Initial history ───
+    # ─── Initial history and metrics ───
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT}
     ]
+    session_tokens = {"prompt": 0, "completion": 0, "total": 0}
 
     # ─── Main loop ───
     while True:
@@ -216,6 +217,20 @@ def main():
             if not response.choices:
                 print("AI: Error: No response choices returned from the API.\n")
                 break
+
+            # ─── Token usage metrics ───
+            usage = response.usage
+            if usage:
+                p_tokens = usage.prompt_tokens
+                c_tokens = usage.completion_tokens
+                t_tokens = usage.total_tokens
+
+                session_tokens["prompt"] += p_tokens
+                session_tokens["completion"] += c_tokens
+                session_tokens["total"] += t_tokens
+
+                print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | "
+                      f"Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)")
 
             assistant_msg = response.choices[0].message
             # Store as a plain dict so the history stays JSON-serializable.

@@ -170,6 +170,9 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # First response: tool call
     mock_response_1 = MagicMock()
+    mock_response_1.usage.prompt_tokens = 10
+    mock_response_1.usage.completion_tokens = 5
+    mock_response_1.usage.total_tokens = 15
     mock_response_1.choices[0].finish_reason = "tool_calls"
     mock_tool_call = MagicMock()
     mock_tool_call.function.name = "read_file"
@@ -180,6 +183,9 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # Second response (after tool result): final text
     mock_response_2 = MagicMock()
+    mock_response_2.usage.prompt_tokens = 20
+    mock_response_2.usage.completion_tokens = 10
+    mock_response_2.usage.total_tokens = 30
     mock_response_2.choices[0].finish_reason = "stop"
     mock_response_2.choices[0].message.content = "Here is the content"
     mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
@@ -196,3 +202,7 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # Check if AI's final text was printed
     mock_print.assert_any_call("AI: Here is the content\n")
+
+    # Check token metrics printing
+    mock_print.assert_any_call("  [Tokens] Request: 10p / 5c (15 total) | Session: 10p / 5c (15 total)")
+    mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 30p / 15c (45 total)")
