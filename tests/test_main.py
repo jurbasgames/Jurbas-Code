@@ -196,3 +196,37 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # Check if AI's final text was printed
     mock_print.assert_any_call("AI: Here is the content\n")
+
+def test_main_missing_api_key():
+    with patch('os.environ.get', return_value=None):
+        with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+            with patch('builtins.print') as mock_print:
+                with pytest.raises(SystemExit):
+                    main.main()
+                mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+                mock_exit.assert_called_once_with(1)
+
+def test_main_authentication_error_continues_loop():
+    # Mocking first interaction results in AuthenticationError, second in quit
+    with patch('os.environ.get', return_value="sk-test-key"):
+        with patch('main.OpenAI') as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+
+            from openai import AuthenticationError
+            # First call raises AuthenticationError, second isn't strictly necessary for the loop logic test
+            # as long as we break the tool loop and return to input()
+            mock_client.chat.completions.create.side_effect = AuthenticationError(
+                message="Invalid API Key",
+                response=MagicMock(),
+                body={}
+            )
+
+            with patch('builtins.input', side_effect=["hello", "quit"]) as mock_input:
+                with patch('builtins.print') as mock_print:
+                    main.main()
+
+                    # Verify it printed the error message
+                    mock_print.assert_any_call("AI: Authentication Error: sk-t****-key is invalid or expired. Invalid API Key")
+                    # Verify input was called twice, meaning it returned to the loop
+                    assert mock_input.call_count == 2

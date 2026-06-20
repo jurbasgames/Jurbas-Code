@@ -1,7 +1,8 @@
 import json
 import os
 import shutil
-from openai import OpenAI
+import sys
+from openai import OpenAI, AuthenticationError, APIError
 
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
@@ -180,9 +181,15 @@ tools = [
 
 
 def main():
+    # ─── Environment validation ───
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        print("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+        sys.exit(1)
+
     # ─── DeepSeek Client ───
     client = OpenAI(
-        api_key=os.environ.get("DEEPSEEK_API_KEY"),
+        api_key=api_key,
         base_url="https://api.deepseek.com",
     )
 
@@ -203,15 +210,25 @@ def main():
 
         # ── Tool call loop (allows multiple steps, bounded for safety) ──
         for _step in range(MAX_TOOL_STEPS):
-            response = client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=messages,
-                stream=False,
-                reasoning_effort="high",
-                extra_body={"thinking": {"type": "enabled"}},
-                tools=tools,
-                tool_choice="auto",
-            )
+            try:
+                response = client.chat.completions.create(
+                    model="deepseek-v4-flash",
+                    messages=messages,
+                    stream=False,
+                    reasoning_effort="high",
+                    extra_body={"thinking": {"type": "enabled"}},
+                    tools=tools,
+                    tool_choice="auto",
+                )
+            except AuthenticationError as e:
+                print(f"AI: Authentication Error: {api_key[:4]}****{api_key[-4:] if len(api_key)>8 else ''} is invalid or expired. {e}")
+                break
+            except APIError as e:
+                print(f"AI: API Error: {e}")
+                break
+            except Exception as e:
+                print(f"AI: Unexpected Error: {e}")
+                break
 
             if not response.choices:
                 print("AI: Error: No response choices returned from the API.\n")
