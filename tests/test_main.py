@@ -144,47 +144,41 @@ def test_write_file_permission_error(mock_safe_path):
     assert "Error: Path not allowed" in main.write_file("test.txt", "content")
 
 # === TESTS FOR main() ===
-@patch('main.OpenAI')
+@patch('main.completion_runner')
 @patch('builtins.input')
 @patch('builtins.print')
-def test_main_loop_exit(mock_print, mock_input, mock_openai):
+def test_main_loop_exit(mock_print, mock_input, mock_completion_runner):
     # Setup to exit immediately
     mock_input.return_value = "exit"
+    complete = MagicMock()
+    mock_completion_runner.return_value = complete
 
     main.main()
 
-    mock_openai.assert_called_once()
+    mock_completion_runner.assert_called_once_with(main.tools)
+    complete.assert_not_called()
     mock_print.assert_not_called()
 
-@patch('main.OpenAI')
+@patch('main.completion_runner')
 @patch('builtins.input')
 @patch('builtins.print')
 @patch('main.read_file')
-def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_openai):
+def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_completion_runner):
     # Input first iteration "do something", second iteration "quit"
     mock_input.side_effect = ["read something", "quit"]
 
-    # Setup OpenAI client mock
-    mock_client = MagicMock()
-    mock_openai.return_value = mock_client
-
-    # First response: tool call
-    mock_response_1 = MagicMock()
-    mock_response_1.choices[0].finish_reason = "tool_calls"
-    mock_tool_call = MagicMock()
-    mock_tool_call.function.name = "read_file"
-    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
-    mock_tool_call.id = "call_123"
-    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
-    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
-
-    # Second response (after tool result): final text
-    mock_response_2 = MagicMock()
-    mock_response_2.choices[0].finish_reason = "stop"
-    mock_response_2.choices[0].message.content = "Here is the content"
-    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
-
-    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+    complete = MagicMock(side_effect=[
+        ({
+            "role": "assistant",
+            "tool_calls": [{
+                "id": "call_123",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+            }],
+        }, "tool_calls"),
+        ({"role": "assistant", "content": "Here is the content"}, "stop"),
+    ])
+    mock_completion_runner.return_value = complete
 
     # Setup tool mock
     mock_read_file.return_value = "mocked file content"

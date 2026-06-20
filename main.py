@@ -1,7 +1,8 @@
 import json
 import os
 import shutil
-from openai import OpenAI
+
+from providers import completion_runner
 
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
@@ -180,11 +181,7 @@ tools = [
 
 
 def main():
-    # ─── DeepSeek Client ───
-    client = OpenAI(
-        api_key=os.environ.get("DEEPSEEK_API_KEY"),
-        base_url="https://api.deepseek.com",
-    )
+    complete = completion_runner(tools)
 
     # ─── Initial history ───
     messages = [
@@ -203,34 +200,24 @@ def main():
 
         # ── Tool call loop (allows multiple steps, bounded for safety) ──
         for _step in range(MAX_TOOL_STEPS):
-            response = client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=messages,
-                stream=False,
-                reasoning_effort="high",
-                extra_body={"thinking": {"type": "enabled"}},
-                tools=tools,
-                tool_choice="auto",
-            )
+            assistant_msg, finish = complete(messages)
 
-            if not response.choices:
+            if assistant_msg is None:
                 print("AI: Error: No response choices returned from the API.\n")
                 break
 
-            assistant_msg = response.choices[0].message
             # Store as a plain dict so the history stays JSON-serializable.
-            messages.append(assistant_msg.model_dump(exclude_none=True))
-
-            finish = response.choices[0].finish_reason
+            messages.append(assistant_msg)
 
             if finish != "tool_calls":
-                reply = (assistant_msg.content or "").strip()
+                reply = (assistant_msg.get("content") or "").strip()
                 print(f"AI: {reply}\n")
                 break
 
-            for tool_call in assistant_msg.tool_calls:
-                name = tool_call.function.name
-                raw_args = tool_call.function.arguments
+            for tool_call in assistant_msg.get("tool_calls") or []:
+                name = tool_call["function"]["name"]
+                raw_args = tool_call["function"]["arguments"]
+                tool_call_id = tool_call["id"]
                 try:
                     args = json.loads(raw_args) if isinstance(
                         raw_args, str) else raw_args
@@ -238,7 +225,7 @@ def main():
                     print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": tool_call.id,
+                        "tool_call_id": tool_call_id,
                         "name": name,
                         "content": f"Error: invalid JSON arguments: {e}",
                     })
@@ -258,7 +245,7 @@ def main():
 
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": tool_call.id,
+                    "tool_call_id": tool_call_id,
                     "name": name,
                     "content": result,
                 })

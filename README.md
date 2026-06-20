@@ -93,6 +93,19 @@ python main.py "Explain the file ./src/utils.py"
 
 ---
 
+## Claude Code subscription provider
+
+Default provider remains DeepSeek. To use Claude Code OAuth instead of Anthropic API billing:
+
+```bash
+unset ANTHROPIC_API_KEY
+LLM_PROVIDER=claude uv run python main.py
+```
+
+The Claude provider reads `claudeAiOauth.accessToken` from `~/.claude/.credentials.json` created by the official `claude` CLI login. You can override with `CLAUDE_CODE_OAUTH_TOKEN` or `CLAUDE_CONFIG_DIR`.
+
+---
+
 ## Running tests
 
 Run tests via uv:
