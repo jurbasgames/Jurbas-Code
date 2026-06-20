@@ -70,7 +70,7 @@ def _is_readonly_bash(command: str) -> bool:
     if not isinstance(command, str):
         return False
     cmd = command.strip()
-    if not cmd or any(op in cmd for op in SHELL_OPERATORS):
+    if not cmd or any(op in cmd for op in SHELL_OPERATORS) or "\n" in cmd or "\r" in cmd:
         return False
     tokens = cmd.split()
     if any(t in MUTATING_FLAGS for t in tokens):
