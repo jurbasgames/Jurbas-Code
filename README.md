@@ -13,7 +13,7 @@ An AI terminal agent with self-modification capability, API-model based to evolv
 git clone https://github.com/jurbasgames/Jurbas-Code.git
 cd Jurbas-Code
 
-# Configure your API key
+# Configure your API key (the app loads this project-local .env automatically)
 echo "DEEPSEEK_API_KEY=your-key-here" > .env
 
 # Install dependencies

@@ -4,8 +4,20 @@ import shutil
 from openai import OpenAI
 
 # ─── Security configuration ───
-ALLOWED_BASE = os.path.realpath("./")
+ALLOWED_BASE = os.path.dirname(os.path.realpath(__file__))
 MAX_TOOL_STEPS = 25  # safety cap on consecutive tool-call iterations
+SECRET_FILE_NAMES = (
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.production",
+    ".env.test",
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+)
+SECRET_FILE_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
 
 
 def safe_path(file_path: str) -> str:
@@ -13,11 +25,53 @@ def safe_path(file_path: str) -> str:
 
     Uses realpath so that symlinks are resolved before the boundary check,
     preventing a symlink inside the project from pointing outside it.
+    Relative paths are resolved from the project root, not from the caller's cwd.
     """
-    full = os.path.realpath(file_path)
-    if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
+    path = file_path or "."
+    if os.path.isabs(path):
+        full = os.path.realpath(path)
+    else:
+        full = os.path.realpath(os.path.join(ALLOWED_BASE, path))
+    try:
+        if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
+            raise PermissionError(f"Path not allowed: {file_path}")
+    except ValueError:
         raise PermissionError(f"Path not allowed: {file_path}")
     return full
+
+
+def is_secret_path(file_path: str) -> bool:
+    """Return True for local credential files that must not be sent to the LLM."""
+    name = os.path.basename(file_path).lower()
+    return name.startswith(".env") or name in SECRET_FILE_NAMES or name.endswith(SECRET_FILE_SUFFIXES)
+
+
+def load_dotenv(file_path: str = ".env") -> None:
+    """Load KEY=VALUE pairs from a project-local .env file without extra deps.
+
+    Existing environment variables win over values from the file.
+    """
+    try:
+        full = safe_path(file_path)
+    except PermissionError:
+        return
+    if not os.path.exists(full) or not os.path.isfile(full):
+        return
+
+    with open(full, "r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
 
 
 # ─── Tools ───
@@ -28,6 +82,8 @@ def read_file(file_path: str) -> str:
         full = safe_path(file_path)
     except PermissionError as e:
         return f"Error: {e}"
+    if is_secret_path(full):
+        return f"Error: reading secret file '{file_path}' is not allowed."
     if not os.path.exists(full):
         return f"Error: file '{file_path}' not found."
     try:
@@ -180,6 +236,8 @@ tools = [
 
 
 def main():
+    load_dotenv()
+
     # ─── DeepSeek Client ───
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
@@ -219,11 +277,11 @@ def main():
 
             role = "assistant"
             content = ""
+            content_seen = False
             reasoning_content = ""
             tool_calls = []
-            finish_reason = None
+            printed_ai_prefix = False
 
-            print("AI: ", end="", flush=True)
             try:
                 for chunk in response_stream:
                     if not chunk.choices:
@@ -231,17 +289,22 @@ def main():
                     delta = chunk.choices[0].delta
                     if getattr(delta, "role", None):
                         role = delta.role
-                    if getattr(chunk.choices[0], "finish_reason", None) is not None:
-                        finish_reason = chunk.choices[0].finish_reason
-
                     reasoning = getattr(delta, "reasoning_content", None)
                     if reasoning:
+                        if not printed_ai_prefix:
+                            print("AI: ", end="", flush=True)
+                            printed_ai_prefix = True
                         reasoning_content += reasoning
                         print(reasoning, end="", flush=True)
 
                     if getattr(delta, "content", None) is not None:
+                        content_seen = True
                         content += delta.content
-                        print(delta.content, end="", flush=True)
+                        if delta.content:
+                            if not printed_ai_prefix:
+                                print("AI: ", end="", flush=True)
+                                printed_ai_prefix = True
+                            print(delta.content, end="", flush=True)
 
                     tool_calls_chunk = getattr(delta, "tool_calls", None)
                     if tool_calls_chunk:
@@ -266,14 +329,15 @@ def main():
                 print(f"\n[Stream interrupted: {e}]")
                 break
 
-            print()  # newline after response finishes
+            if printed_ai_prefix:
+                print()  # newline after visible response text finishes
 
-            if not content and not reasoning_content and not tool_calls:
+            if not content_seen and not content and not reasoning_content and not tool_calls:
                 print("AI: Error: No response choices returned from the API.\n")
                 break
 
             assistant_msg_dict = {"role": role}
-            if content:
+            if content_seen or content or tool_calls:
                 assistant_msg_dict["content"] = content
             if reasoning_content:
                 assistant_msg_dict["reasoning_content"] = reasoning_content
@@ -282,7 +346,7 @@ def main():
 
             messages.append(assistant_msg_dict)
 
-            if finish_reason != "tool_calls" and not tool_calls:
+            if not tool_calls:
                 break
 
             for tool_call in tool_calls:
