@@ -93,6 +93,12 @@ python main.py "Explain the file ./src/utils.py"
 
 ---
 
+## Running tests
+
+Run tests via uv:
+```bash
+uv run pytest
+```
 ### Compression skills
 
 ### Auto Benchmarking
