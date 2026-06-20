@@ -41,7 +41,7 @@ def _is_dangerous(command: str) -> str | None:
         if pattern in lower:
             return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
     # Block pipe-to-dangerous destinations
-    if re.search(r'\|\s*(sudo|sh|bash)\b', lower):
+    if re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
         return "Piping to sudo/sh/bash is blocked for security."
     return None
 
