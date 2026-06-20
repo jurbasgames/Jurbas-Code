@@ -26,7 +26,7 @@ python main.py
 ## 🧪 Tests
 
 ```bash
-uv run pytest
+uv run --extra dev pytest
 ```
 
 ## 🤝 How to Contribute
