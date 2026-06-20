@@ -154,7 +154,7 @@ def test_main_loop_exit(mock_print, mock_input, mock_openai):
     main.main()
 
     mock_openai.assert_called_once()
-    mock_print.assert_not_called()
+    mock_print.assert_any_call(f"Jurbas-Code v{main.VERSION}")
 
 @patch('main.OpenAI')
 @patch('builtins.input')
@@ -196,3 +196,21 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # Check if AI's final text was printed
     mock_print.assert_any_call("AI: Here is the content\n")
+
+
+def test_main_version_flag():
+    with patch('sys.argv', ['main.py', '--version']):
+        with patch('sys.exit', side_effect=SystemExit(0)) as mock_exit:
+            with patch('builtins.print') as mock_print:
+                with pytest.raises(SystemExit):
+                    main.main()
+                mock_print.assert_called_with(f"Jurbas-Code v{main.VERSION}")
+                mock_exit.assert_called_once_with(0)
+
+    with patch('sys.argv', ['main.py', '-v']):
+        with patch('sys.exit', side_effect=SystemExit(0)) as mock_exit:
+            with patch('builtins.print') as mock_print:
+                with pytest.raises(SystemExit):
+                    main.main()
+                mock_print.assert_called_with(f"Jurbas-Code v{main.VERSION}")
+                mock_exit.assert_called_once_with(0)

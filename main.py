@@ -1,7 +1,14 @@
 import json
 import os
 import shutil
+import sys
+from importlib import metadata
 from openai import OpenAI
+
+try:
+    VERSION = metadata.version("jurbas-code")
+except metadata.PackageNotFoundError:
+    VERSION = "0.1.0"
 
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
@@ -180,6 +187,13 @@ tools = [
 
 
 def main():
+    # ─── CLI Arguments ───
+    if "--version" in sys.argv or "-v" in sys.argv:
+        print(f"Jurbas-Code v{VERSION}")
+        sys.exit(0)
+
+    print(f"Jurbas-Code v{VERSION}")
+
     # ─── DeepSeek Client ───
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
