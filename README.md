@@ -1,22 +1,53 @@
 # Jurbas-Code
 
-## 2. 🔧 Expandir o conjunto de ferramentas
+[![Contribute](https://img.shields.io/badge/contribute-CONTRIBUTING.md-blue)](CONTRIBUTING.md)
 
-Hoje o agente só **lê** arquivos. Ferramentas naturais para adicionar:
-
-| Ferramenta | Descrição |
-|---|---|
-| `write_file` | Criar/editar arquivos |
-| `list_directory` | Navegar pelo sistema de arquivos |
-| `search_in_files` (grep) | Buscar padrões dentro de arquivos |
-| `execute_command` | Rodar comandos shell (com cuidado!) |
-| `web_search` | Buscar na internet |
+An AI terminal agent with self-modification capability, API-model based to evolve its own skills. A self-evolving, self-benchmarking AI agent with data-driven self-analysis and human feedback for real evolution — not just perception-based. Inspired by Hermes from Nous Research.
 
 ---
 
-## 3. 📜 Suporte a streaming
+## 🚀 Getting Started
 
-Hoje a resposta aparece de uma vez. Com streaming, o texto aparece token a token, melhorando a experiência:
+```bash
+# Clone the repository
+git clone https://github.com/jurbasgames/Jurbas-Code.git
+cd Jurbas-Code
+
+# Configure your API key
+echo "DEEPSEEK_API_KEY=your-key-here" > .env
+
+# Install dependencies
+uv sync
+
+# Run
+python main.py
+```
+
+## 🧪 Tests
+
+```bash
+uv run pytest
+```
+
+## 🤝 How to Contribute
+
+Check the full guide in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## 📋 Roadmap
+
+### 1. 🔧 Expand the tool set
+
+| Tool | Description |
+|---|---|
+| `web_search` | Search the internet |
+
+---
+
+### 2. 📜 Streaming support (in progress)
+
+Currently the response appears all at once. With streaming, text appears token by token, improving the experience:
 
 ```python
 response = client.chat.completions.create(..., stream=True)
@@ -26,23 +57,17 @@ for chunk in response:
 
 ---
 
-## 4. 🪵 Sistema de logging e persistência
+### 3. 🪵 Logging and persistence system
 
-- Substituir `print` por logging com níveis (DEBUG, INFO, ERROR).
-- Salvar o histórico da conversa em arquivo (ex: `history.json`) para continuar entre sessões.
-- Lidar com **limite de tokens**: truncar ou sumarizar mensagens antigas.
-
----
-
-## 5. 🔁 Múltiplas tool calls em sequência
-
-Hoje o código processa tool calls apenas uma vez. O ideal é um loop que continue processando enquanto o modelo pedir novas ferramentas, possibilitando fluxos como: *listar diretório → ler arquivo → editar arquivo*.
+- Replace `print` with logging levels (DEBUG, INFO, ERROR).
+- Save conversation history to a file (e.g. `history.json`) to continue between sessions.
+- Handle **token limits**: truncate or summarize old messages.
 
 ---
 
-## 6. ⚙️ Arquivo de configuração
+### 4. ⚙️ Configuration file
 
-Externalizar API key, modelo, system prompt e parâmetros para um `.env` + `config.yaml`:
+Externalize API key, model, system prompt and parameters to a `.env` + `config.yaml`:
 
 ```yaml
 model: "deepseek-v4-pro"
@@ -52,20 +77,18 @@ tools_enabled: ["read_file", "write_file", "list_directory"]
 
 ---
 
-## 7. 🛡️ Segurança e sandboxing
+### 5. 🛡️ Security and sandboxing
 
-- Confirmar operações destrutivas (antes de escrever/deletar arquivos).
-- Limitar diretórios acessíveis.
-- Sandbox para comandos shell (Docker, timeout, etc.).
+- Sandboxing and YOLO mode
 
 ---
 
-## 8. 🧩 Modo não-interativo
+### 6. 🧩 Non-interactive mode
 
-Permitir receber um prompt diretamente da linha de comando:
+Allow receiving a prompt directly from the command line:
 
 ```bash
-python main.py "Explique o arquivo ./src/utils.py"
+python main.py "Explain the file ./src/utils.py"
 ```
 
 ---
@@ -76,3 +99,8 @@ Run tests via uv:
 ```bash
 uv run pytest
 ```
+### Compression skills
+
+### Auto Benchmarking
+
+### Memory system with Mnemosyne
