@@ -1,7 +1,7 @@
 import json
 import os
 import shutil
-from openai import OpenAI
+from openai import OpenAI, AuthenticationError, APIError, RateLimitError, APITimeoutError
 
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
@@ -203,15 +203,31 @@ def main():
 
         # ── Tool call loop (allows multiple steps, bounded for safety) ──
         for _step in range(MAX_TOOL_STEPS):
-            response = client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=messages,
-                stream=False,
-                reasoning_effort="high",
-                extra_body={"thinking": {"type": "enabled"}},
-                tools=tools,
-                tool_choice="auto",
-            )
+            try:
+                response = client.chat.completions.create(
+                    model="deepseek-v4-flash",
+                    messages=messages,
+                    stream=False,
+                    reasoning_effort="high",
+                    extra_body={"thinking": {"type": "enabled"}},
+                    tools=tools,
+                    tool_choice="auto",
+                )
+            except AuthenticationError as e:
+                print(f"AI: Authentication Error: {e}\n")
+                break
+            except RateLimitError as e:
+                print(f"AI: Rate Limit Error: {e}\n")
+                break
+            except APITimeoutError as e:
+                print(f"AI: Timeout Error: {e}\n")
+                break
+            except APIError as e:
+                print(f"AI: API Error: {e}\n")
+                break
+            except Exception as e:
+                print(f"AI: Unexpected Error: {e}\n")
+                break
 
             if not response.choices:
                 print("AI: Error: No response choices returned from the API.\n")
