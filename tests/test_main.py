@@ -258,14 +258,14 @@ def test_main_missing_deepseek_api_key(mock_print):
 @patch('builtins.print')
 def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
     from openai import AuthenticationError
-    
+
     mock_input.side_effect = ["hello"]
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
-    
+
     err = AuthenticationError("Invalid API Key", response=MagicMock(), body={})
     mock_client.chat.completions.create.side_effect = err
-    
+
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-123456789"}):
         with patch('sys.exit', side_effect=SystemExit) as mock_exit:
             with pytest.raises(SystemExit):
@@ -279,13 +279,13 @@ def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
 @patch('builtins.print')
 def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
     from openai import APIError
-    
+
     mock_input.side_effect = ["hello", "retry_hello", "quit"]
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
-    
+
     err = APIError("Rate limit exceeded", request=MagicMock(), body={})
-    
+
     mock_response = MagicMock()
     mock_response.usage.prompt_tokens = 5
     mock_response.usage.completion_tokens = 5
@@ -293,18 +293,15 @@ def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
     mock_response.choices[0].finish_reason = "stop"
     mock_response.choices[0].message.content = "Success response"
     mock_response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Success response"}
-    
+
     mock_client.chat.completions.create.side_effect = [err, mock_response]
-    
+
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
         main.main()
-        
+
         assert mock_client.chat.completions.create.call_count == 2
-        
+
         second_call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
         contents = [m["content"] for m in second_call_kwargs["messages"] if m["role"] == "user"]
         assert "hello" not in contents
         assert "retry_hello" in contents
-
-
-
