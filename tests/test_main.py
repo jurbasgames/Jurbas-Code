@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 import os
 import sys
@@ -143,20 +144,35 @@ def test_write_file_permission_error(mock_safe_path):
     mock_safe_path.side_effect = PermissionError("Path not allowed")
     assert "Error: Path not allowed" in main.write_file("test.txt", "content")
 
+
+def test_normalize_tool_call_accepts_function_dict():
+    tool_call = SimpleNamespace(
+        id="call_123",
+        type="function",
+        function={"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    )
+
+    assert main.normalize_tool_call(tool_call) == {
+        "id": "call_123",
+        "type": "function",
+        "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    }
+
 # === TESTS FOR main() ===
-@patch('main.OpenAI')
+@patch('openai.OpenAI')
 @patch('builtins.input')
 @patch('builtins.print')
 def test_main_loop_exit(mock_print, mock_input, mock_openai):
     # Setup to exit immediately
     mock_input.return_value = "exit"
 
-    main.main()
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek"}):
+        main.main()
 
     mock_openai.assert_called_once()
     mock_print.assert_not_called()
 
-@patch('main.OpenAI')
+@patch('openai.OpenAI')
 @patch('builtins.input')
 @patch('builtins.print')
 @patch('main.read_file')
@@ -195,7 +211,8 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
     # Setup tool mock
     mock_read_file.return_value = "mocked file content"
 
-    main.main()
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek"}):
+        main.main()
 
     # Check if tool was actually called
     mock_read_file.assert_called_once_with("test.txt")

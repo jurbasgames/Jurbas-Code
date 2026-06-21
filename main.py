@@ -414,6 +414,21 @@ def convert_messages_to_anthropic(messages):
                 anthropic_msgs.append({"role": "user", "content": [block]})
     return anthropic_msgs
 
+def normalize_tool_call(tool_call):
+    """Return a plain dict for tool calls from either OpenAI/DeepSeek or Anthropic."""
+    if isinstance(tool_call, dict):
+        return tool_call
+    function = getattr(tool_call, "function", None)
+    function_is_dict = isinstance(function, dict)
+    return {
+        "id": getattr(tool_call, "id", None),
+        "type": getattr(tool_call, "type", "function"),
+        "function": {
+            "name": function.get("name") if function_is_dict else getattr(function, "name", None),
+            "arguments": function.get("arguments", "{}") if function_is_dict else getattr(function, "arguments", "{}"),
+        },
+    }
+
 def main():
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
     
@@ -464,7 +479,7 @@ def main():
                     session_tokens["prompt"] += p_tokens
                     session_tokens["completion"] += c_tokens
                     session_tokens["total"] += t_tokens
-                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c")
+                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)")
 
                 assistant_msg = response.choices[0].message
                 messages.append(assistant_msg.model_dump(exclude_none=True))
@@ -475,7 +490,7 @@ def main():
                     print(f"AI: {reply}\n")
                     break
                 
-                tool_calls = assistant_msg.tool_calls
+                tool_calls = [normalize_tool_call(tc) for tc in (assistant_msg.tool_calls or [])]
                 
             elif provider == "claude":
                 anthropic_messages = convert_messages_to_anthropic(messages)
@@ -500,7 +515,7 @@ def main():
                     session_tokens["prompt"] += p_tokens
                     session_tokens["completion"] += c_tokens
                     session_tokens["total"] += t_tokens
-                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c")
+                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)")
                 
                 assistant_text = ""
                 tool_calls = []
