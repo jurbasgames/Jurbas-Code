@@ -60,6 +60,12 @@ SHELL_OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(", "&")
 MUTATING_FLAGS = {"-d", "-D", "--delete", "-f", "--force", "--prune", "--hard"}
 
 def _is_readonly_bash(command: str) -> bool:
+    """Best-effort check: True only for commands that clearly cannot mutate state.
+
+    Conservative by design — anything ambiguous (shell operators, mutating flags,
+    unknown commands) returns False so it gets gated behind a confirmation prompt
+    instead of running unattended.
+    """
     if not isinstance(command, str):
         return False
     cmd = command.strip()
