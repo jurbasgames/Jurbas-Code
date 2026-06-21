@@ -125,13 +125,14 @@ def run_bash(command: str) -> str:
             errors="replace",
             cwd=ALLOWED_BASE,
             timeout=BASH_TIMEOUT,
-            shell=_SHELL_USE_SHELL,
             stdin=subprocess.DEVNULL,
         )
         if _SHELL_EXECUTABLE:
-            kwargs["executable"] = _SHELL_EXECUTABLE
-
-        result = subprocess.run(command, **kwargs)
+            kwargs["shell"] = False
+            result = subprocess.run([_SHELL_EXECUTABLE, "-c", command], **kwargs)
+        else:
+            kwargs["shell"] = True
+            result = subprocess.run(command, **kwargs)
         output_parts = []
         if result.stdout.strip():
             output_parts.append(result.stdout.rstrip("\n"))
