@@ -52,10 +52,10 @@ def _is_dangerous(command: str) -> str | None:
 
 READONLY_BASH = {
     "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "tree",
-    "stat", "file", "which", "whoami", "date", "echo", "env", "du", "df", "uname",
+    "stat", "file", "which", "whoami", "date", "echo", "du", "df", "uname",
 }
 READONLY_GIT_SUBCMDS = {
-    "status", "log", "diff", "show", "branch", "remote",
+    "status", "log", "diff", "show",
     "ls-files", "rev-parse", "blame", "describe",
 }
 SHELL_OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(", "&")
@@ -196,6 +196,7 @@ def run_bash(command: str) -> str:
             timeout=BASH_TIMEOUT,
             shell=True,
             executable="/bin/bash",
+            stdin=subprocess.DEVNULL,
         )
         output_parts = []
         if result.stdout.strip():
@@ -364,9 +365,13 @@ def main():
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
     
     if provider == "deepseek":
-        from openai import OpenAI
+        api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+        if not api_key:
+            print("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+            sys.exit(1)
+        from openai import OpenAI, AuthenticationError, APIError
         client = OpenAI(
-            api_key=os.environ.get("DEEPSEEK_API_KEY"),
+            api_key=api_key,
             base_url="https://api.deepseek.com",
         )
     elif provider == "claude":
@@ -388,15 +393,31 @@ def main():
 
         for _step in range(MAX_TOOL_STEPS):
             if provider == "deepseek":
-                response = client.chat.completions.create(
-                    model="deepseek-v4-flash",
-                    messages=messages,
-                    stream=False,
-                    reasoning_effort="high",
-                    extra_body={"thinking": {"type": "enabled"}},
-                    tools=tools,
-                    tool_choice="auto",
-                )
+                try:
+                    response = client.chat.completions.create(
+                        model="deepseek-v4-flash",
+                        messages=messages,
+                        stream=False,
+                        reasoning_effort="high",
+                        extra_body={"thinking": {"type": "enabled"}},
+                        tools=tools,
+                        tool_choice="auto",
+                    )
+                except AuthenticationError as e:
+                    print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
+                    sys.exit(1)
+                except APIError as e:
+                    print(f"AI: API Error: {e}")
+                    # Drop the failed turn (user prompt and any partial tool interactions)
+                    # from history to avoid stale context on retry.
+                    while messages and messages[-1].get("role") != "user":
+                        messages.pop()
+                    if messages and messages[-1].get("role") == "user":
+                        messages.pop()
+                    break
+                except Exception as e:
+                    print(f"AI: Unexpected Error: {e}")
+                    break
                 
                 if not response.choices:
                     print("AI: Error: No response choices returned from the API.\n")

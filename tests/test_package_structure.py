@@ -12,3 +12,8 @@ def test_exported_symbols():
     actual_tool_names = {t["function"]["name"] for t in tools}
 
     assert actual_tool_names == expected_tool_names
+
+def test_system_prompt_mentions_extracted_package_files():
+    assert "main.py" in SYSTEM_PROMPT
+    assert "jurbas_code/prompts.py" in SYSTEM_PROMPT
+    assert "jurbas_code/tool_schemas.py" in SYSTEM_PROMPT
