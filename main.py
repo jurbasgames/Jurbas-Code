@@ -69,6 +69,7 @@ def _is_readonly_bash(command: str) -> bool:
     return head in READONLY_BASH
 
 def _requires_confirmation(name: str, args) -> bool:
+    """Decide whether a tool call needs explicit user approval before running."""
     if not isinstance(args, dict):
         return True
     if name == "write_file":
