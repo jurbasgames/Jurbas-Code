@@ -419,12 +419,13 @@ def normalize_tool_call(tool_call):
     if isinstance(tool_call, dict):
         return tool_call
     function = getattr(tool_call, "function", None)
+    function_is_dict = isinstance(function, dict)
     return {
         "id": getattr(tool_call, "id", None),
         "type": getattr(tool_call, "type", "function"),
         "function": {
-            "name": getattr(function, "name", None),
-            "arguments": getattr(function, "arguments", "{}"),
+            "name": function.get("name") if function_is_dict else getattr(function, "name", None),
+            "arguments": function.get("arguments", "{}") if function_is_dict else getattr(function, "arguments", "{}"),
         },
     }
 

@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 import os
 import sys
@@ -142,6 +143,20 @@ def test_write_file_with_backup(mock_open, mock_getsize, mock_copy2, mock_exists
 def test_write_file_permission_error(mock_safe_path):
     mock_safe_path.side_effect = PermissionError("Path not allowed")
     assert "Error: Path not allowed" in main.write_file("test.txt", "content")
+
+
+def test_normalize_tool_call_accepts_function_dict():
+    tool_call = SimpleNamespace(
+        id="call_123",
+        type="function",
+        function={"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    )
+
+    assert main.normalize_tool_call(tool_call) == {
+        "id": "call_123",
+        "type": "function",
+        "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    }
 
 # === TESTS FOR main() ===
 @patch('openai.OpenAI')
