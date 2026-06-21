@@ -28,6 +28,11 @@ DANGEROUS_PATTERNS = [
 ]
 
 def safe_path(file_path: str) -> str:
+    """Resolves and validates a path within the allowed directory.
+
+    Uses realpath so that symlinks are resolved before the boundary check,
+    preventing a symlink inside the project from pointing outside it.
+    """
     full = os.path.realpath(file_path)
     if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
         raise PermissionError(f"Path not allowed: {file_path}")
