@@ -13,6 +13,24 @@ import jurbas.security
 import jurbas.tools
 
 
+@pytest.fixture(autouse=True)
+def clean_history():
+    """Ensure history.json is removed before and after every test to keep test isolation."""
+    for filename in ("history.json", "history.json.bak"):
+        if os.path.exists(filename):
+            try:
+                os.remove(filename)
+            except OSError:
+                pass
+    yield
+    for filename in ("history.json", "history.json.bak"):
+        if os.path.exists(filename):
+            try:
+                os.remove(filename)
+            except OSError:
+                pass
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # safe_path()
 # ═══════════════════════════════════════════════════════════════════════

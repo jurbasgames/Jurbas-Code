@@ -176,11 +176,54 @@ if os.path.exists(os.path.join(ALLOWED_BASE, ".git")):
     except Exception as e:
         print(f"⚠️ Auto-extract error: {e}")
 
+HISTORY_FILE = "history.json"
+
+def load_history() -> list:
+    """Loads message history from file, syncing with the current SYSTEM_PROMPT."""
+    initial = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if not os.path.exists(HISTORY_FILE):
+        return initial
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            messages = json.load(f)
+        if not isinstance(messages, list) or not messages:
+            return initial
+        # Sync system prompt if it changed
+        if messages[0].get("role") == "system":
+            messages[0]["content"] = SYSTEM_PROMPT
+        else:
+            messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+        return messages
+    except Exception:
+        return initial
+
+
+def save_history(messages: list):
+    """Saves the current message history to a file."""
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages, f, indent=2)
+    except Exception as e:
+        print(f"Error saving history: {e}")
+
 def main(args=None):
     parser = argparse.ArgumentParser(
         description="Jurbas-Code: A self-modifying terminal agent."
     )
-    parser.parse_args(args)
+    parser.add_argument(
+        "--clear-history",
+        action="store_true",
+        help="Clear the session history and exit."
+    )
+    parsed_args = parser.parse_args(args)
+
+    if parsed_args.clear_history:
+        if os.path.exists(HISTORY_FILE):
+            os.remove(HISTORY_FILE)
+            print("History cleared.")
+        else:
+            print("No history file found.")
+        return
 
     load_dotenv()
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
@@ -200,7 +243,7 @@ def main(args=None):
     else:
         sys.exit(f"Provider desconhecido: {provider}. Use 'claude' ou 'deepseek'.")
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = load_history()
     session_tokens = {"prompt": 0, "completion": 0, "total": 0}
 
     while True:
@@ -211,6 +254,7 @@ def main(args=None):
             continue
 
         messages.append({"role": "user", "content": user_input})
+        save_history(messages)
 
         for _step in range(MAX_TOOL_STEPS):
             if provider == "deepseek":
@@ -325,6 +369,7 @@ def main(args=None):
                     tool_calls = assistant_msg_dict["tool_calls"]
 
                 messages.append(assistant_msg_dict)
+                save_history(messages)
 
                 if not tool_calls:
                     break
@@ -377,6 +422,7 @@ def main(args=None):
                 if tool_calls:
                     assistant_msg["tool_calls"] = tool_calls
                 messages.append(assistant_msg)
+                save_history(messages)
                 
                 if not tool_calls:
                     reply = assistant_text.strip()
@@ -421,6 +467,7 @@ def main(args=None):
                     "name": name,
                     "content": result,
                 })
+                save_history(messages)
             else:
                 print(f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
 
