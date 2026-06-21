@@ -158,6 +158,14 @@ def write_file(file_path: str, content: str) -> str:
         return f"Error writing file: {e}"
 
 def run_bash(command: str) -> str:
+    """Execute a bash command inside the project directory and return its output.
+
+    Use this for git operations, running scripts, installing dependencies,
+    or any shell-level task. The command runs in './' (ALLOWED_BASE) as working
+    directory with a {BASH_TIMEOUT}s timeout.
+
+    Dangerous commands (rm -rf /, sudo, mkfs, etc.) are blocked for safety.
+    """
     if not isinstance(command, str):
         return "Error: command must be a string."
     reason = _is_dangerous(command)
