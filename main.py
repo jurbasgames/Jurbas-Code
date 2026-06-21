@@ -5,6 +5,7 @@ Usage:
     python main.py --serve  # Same (kept for compatibility)
 """
 
+import argparse
 import json
 import os
 import sys
@@ -175,7 +176,12 @@ if os.path.exists(os.path.join(ALLOWED_BASE, ".git")):
     except Exception as e:
         print(f"⚠️ Auto-extract error: {e}")
 
-def main():
+def main(args=None):
+    parser = argparse.ArgumentParser(
+        description="Jurbas-Code: A self-modifying terminal agent."
+    )
+    parser.parse_args(args)
+
     load_dotenv()
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
     

@@ -263,7 +263,7 @@ def test_main_loop_exit(mock_print, mock_input, mock_openai):
     """Exiting immediately should not call the API."""
     mock_input.return_value = "exit"
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
-        main.main()
+        main.main(args=[])
     mock_openai.assert_called_once()
     ai_prints = [c for c in mock_print.call_args_list
                  if c.args and "AI:" in str(c.args[0])]
@@ -284,7 +284,7 @@ def test_main_loop_streams_content(mock_print, mock_input, mock_openai):
     )
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
-        main.main()
+        main.main(args=[])
 
     print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list
                          if c.args)
@@ -337,7 +337,7 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print,
     mock_read_file.return_value = "mocked content"
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
-        main.main()
+        main.main(args=[])
 
     mock_read_file.assert_called_once_with("test.txt")
     print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list
@@ -354,7 +354,7 @@ def test_main_missing_deepseek_api_key(mock_print):
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "   "}):
         with patch('sys.exit', side_effect=SystemExit) as mock_exit:
             with pytest.raises(SystemExit):
-                main.main()
+                main.main(args=[])
             mock_exit.assert_called_once_with(1)
             mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
 
@@ -375,7 +375,7 @@ def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-123456789"}):
         with patch('sys.exit', side_effect=SystemExit) as mock_exit:
             with pytest.raises(SystemExit):
-                main.main()
+                main.main(args=[])
             mock_exit.assert_called_once_with(1)
             mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-1' is invalid or expired. Invalid API Key")
 
@@ -407,7 +407,7 @@ def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
     mock_client.chat.completions.create.side_effect = [err, _chunk_stream()]
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
-        main.main()
+        main.main(args=[])
 
         assert mock_client.chat.completions.create.call_count == 2
         
@@ -461,7 +461,7 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
     mock_client.chat.completions.create.side_effect = [_tool_call_stream(), _text_response_stream()]
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
-        main.main()
+        main.main(args=[])
 
     call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
     tool_result = [m for m in call_kwargs["messages"] if m["role"] == "tool"][0]
