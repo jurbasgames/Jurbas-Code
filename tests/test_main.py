@@ -7,6 +7,44 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import main
 
+# === TESTS FOR Security Functions ===
+
+def test_is_dangerous():
+    assert main._is_dangerous("ls | sudo tee file") is not None
+    assert main._is_dangerous("cat file | bash") is not None
+    assert main._is_dangerous("cat file |   sudo -i") is not None
+    assert main._is_dangerous("ls | grep something") is None
+
+def test_dangerous_patterns():
+    assert main._is_dangerous("echo ok && rm -rf /") is not None
+    assert main._is_dangerous("rm -rf /") is not None
+
+def test_is_readonly_bash():
+    assert main._is_readonly_bash(123) is False
+    assert main._is_readonly_bash(None) is False
+    assert main._is_readonly_bash("ls -la") is True
+    assert main._is_readonly_bash("ls -la && echo ok") is False
+    assert main._is_readonly_bash("rm -rf /") is False
+
+def test_requires_confirmation():
+    assert main._requires_confirmation("write_file", {"file_path": "a.txt", "content": "a"}) is True
+    assert main._requires_confirmation("run_bash", {"command": "echo ok && ls"}) is True
+    assert main._requires_confirmation("run_bash", {"command": "ls"}) is False
+    # Non-dict args should require confirmation to be safe
+    assert main._requires_confirmation("run_bash", "echo ok") is True
+    assert main._requires_confirmation("run_bash", 123) is True
+    assert main._requires_confirmation("write_file", None) is True
+
+def test_run_bash_non_string():
+    assert main.run_bash(123) == "Error: command must be a string."
+    assert main.run_bash(None) == "Error: command must be a string."
+
+@patch('builtins.input', return_value='y')
+def test_confirm_action(mock_input):
+    assert main.confirm_action("run_bash", {"command": "ls"}) is True
+    assert main.confirm_action("run_bash", "ls") is True # Non-dict
+    assert main.confirm_action("run_bash", None) is True # Non-dict
+
 # === TESTS FOR safe_path() ===
 def test_safe_path_allowed():
     # Test path resolution inside ALLOWED_BASE

@@ -3,12 +3,14 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from openai import OpenAI
 
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
 MAX_TOOL_STEPS = 25  # safety cap on consecutive tool-call iterations
 BASH_TIMEOUT = 60*5
+HISTORY_FILE = "history.json"
 
 # Commands/patterns that are never allowed (blocked by prefix match)
 DANGEROUS_PATTERNS = [
@@ -246,6 +248,37 @@ TOOL_HANDLERS = {
     "run_bash": lambda args: run_bash(args["command"]),
 }
 
+
+# ─── History Management ───
+
+def load_history() -> list:
+    """Loads message history from file, syncing with the current SYSTEM_PROMPT."""
+    initial = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if not os.path.exists(HISTORY_FILE):
+        return initial
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            messages = json.load(f)
+        if not isinstance(messages, list) or not messages:
+            return initial
+        # Sync system prompt if it changed
+        if messages[0].get("role") == "system":
+            messages[0]["content"] = SYSTEM_PROMPT
+        else:
+            messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+        return messages
+    except Exception:
+        return initial
+
+
+def save_history(messages: list):
+    """Saves the current message history to a file."""
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages, f, indent=2)
+    except Exception as e:
+        print(f"Error saving history: {e}")
+
 # ─── System Prompt ───
 SYSTEM_PROMPT = (
     "You are a terminal agent with SELF-MODIFICATION capability. You can read, list, WRITE files, and execute BASH commands — including your own source code (main.py). Your purpose is to evolve your own capabilities: when the user asks for a new feature, read your current code, generate a modified version, and overwrite the corresponding file.\n\n"
@@ -347,6 +380,16 @@ tools = [
 
 
 def main():
+    # ─── Argument handling ───
+    if "--clear-history" in sys.argv:
+        if os.path.exists(HISTORY_FILE):
+            os.remove(HISTORY_FILE)
+            print("History cleared.")
+        else:
+            print("No history file found.")
+        if len(sys.argv) == 2:
+            return
+
     # ─── DeepSeek Client ───
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
@@ -354,9 +397,7 @@ def main():
     )
 
     # ─── Initial history ───
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
+    messages = load_history()
 
     # ─── Main loop ───
     while True:
@@ -367,6 +408,7 @@ def main():
             continue
 
         messages.append({"role": "user", "content": user_input})
+        save_history(messages)
 
         # ── Tool call loop (allows multiple steps, bounded for safety) ──
         for _step in range(MAX_TOOL_STEPS):
@@ -387,6 +429,7 @@ def main():
             assistant_msg = response.choices[0].message
             # Store as a plain dict so the history stays JSON-serializable.
             messages.append(assistant_msg.model_dump(exclude_none=True))
+            save_history(messages)
 
             finish = response.choices[0].finish_reason
 
@@ -434,6 +477,7 @@ def main():
                     "name": name,
                     "content": result,
                 })
+                save_history(messages)
         else:
             # Loop exhausted without a final (non-tool) response.
             print(
