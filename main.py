@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -17,15 +18,50 @@ ALLOWED_BASE = os.path.realpath("./")
 MAX_TOOL_STEPS = 25
 BASH_TIMEOUT = 60*5
 
+# ─── Cross-platform shell detection ───
+_IS_WINDOWS = platform.system() == "Windows"
+
+def _resolve_shell() -> tuple[str | None, bool]:
+    """Return (executable_path_or_None, use_shell_bool) for subprocess.
+
+    On Windows: let the OS find cmd.exe via shell=True (executable=None).
+    On Unix: prefer /bin/bash, fall back to /bin/sh, then shell=True fallback.
+    Returns (executable, shell) tuple.
+    """
+    if _IS_WINDOWS:
+        return None, True  # cmd.exe is resolved automatically by Windows
+    for candidate in ("/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"):
+        if os.path.isfile(candidate):
+            return candidate, True
+    return None, True  # last-resort: let the OS pick
+
+_SHELL_EXECUTABLE, _SHELL_USE_SHELL = _resolve_shell()
+
 DANGEROUS_PATTERNS = [
+    # Unix-style
     "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .",
-    "mkfs", "dd if=", "format", "fdisk",
+    "mkfs", "dd if=", "fdisk",
     ":(){ :|:& };:",
     "chmod 000", "chown -R",
     "> /dev/sda", "> /dev/sdb",
     "wget ", "curl ",
     "sudo ", "su ",
+    # Windows-style
+    "del /f /s /q c:\\", "del /f /s /q c:/",
+    "format c:", "format c:/",
+    "rd /s /q c:\\", "rd /s /q c:/",
+    "rmdir /s /q c:\\", "rmdir /s /q c:/",
+    "cipher /w:c", "sfc /scannow",
+    "reg delete", "bcdedit",
+    "net user", "net localgroup",
+    "shutdown /", "taskkill /f",
 ]
+
+# On Windows 'format' is a built-in cmd command — keep the Windows-specific entry above
+# but exclude the bare Unix 'format' string to avoid false positives on Windows paths.
+if not _IS_WINDOWS:
+    DANGEROUS_PATTERNS.append("format")
+
 
 def safe_path(file_path: str) -> str:
     """Resolves and validates a path within the allowed directory.
@@ -38,19 +74,26 @@ def safe_path(file_path: str) -> str:
         raise PermissionError(f"Path not allowed: {file_path}")
     return full
 
+
 def _is_dangerous(command: str) -> str | None:
     """Check if a command contains blacklisted patterns. Returns a reason or None."""
     lower = command.lower().strip()
     for pattern in DANGEROUS_PATTERNS:
         if pattern in lower:
             return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
-    if re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
+    if not _IS_WINDOWS and re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
         return "Piping to sudo/sh/bash is blocked for security."
     return None
+
 
 READONLY_BASH = {
     "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "tree",
     "stat", "file", "which", "whoami", "date", "echo", "env", "du", "df", "uname",
+}
+# Windows equivalents for read-only detection
+READONLY_CMD = {
+    "dir", "type", "echo", "date", "time", "ver", "whoami",
+    "where", "tree", "set", "path", "hostname",
 }
 READONLY_GIT_SUBCMDS = {
     "status", "log", "diff", "show", "branch", "remote",
@@ -58,6 +101,7 @@ READONLY_GIT_SUBCMDS = {
 }
 SHELL_OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(", "&")
 MUTATING_FLAGS = {"-d", "-D", "--delete", "-f", "--force", "--prune", "--hard"}
+
 
 def _is_readonly_bash(command: str) -> bool:
     """Best-effort check: True only for commands that clearly cannot mutate state.
@@ -74,11 +118,13 @@ def _is_readonly_bash(command: str) -> bool:
     tokens = cmd.split()
     if any(t in MUTATING_FLAGS for t in tokens):
         return False
-    head = tokens[0]
+    head = tokens[0].lower()
     if head == "git":
         sub = tokens[1] if len(tokens) > 1 else ""
         return sub in READONLY_GIT_SUBCMDS
-    return head in READONLY_BASH
+    readonly_set = READONLY_CMD if _IS_WINDOWS else READONLY_BASH
+    return head in readonly_set
+
 
 def _requires_confirmation(name: str, args) -> bool:
     """Decide whether a tool call needs explicit user approval before running."""
@@ -91,6 +137,7 @@ def _requires_confirmation(name: str, args) -> bool:
         return not _is_readonly_bash(command)
     return False
 
+
 def confirm_action(name: str, args) -> bool:
     """Prompt the user to approve a mutating action. Returns True if approved."""
     args = args if isinstance(args, dict) else {}
@@ -99,7 +146,8 @@ def confirm_action(name: str, args) -> bool:
         print(f"      $ {args.get('command', '')}")
     elif name == "write_file":
         content = args.get("content", "")
-        print(f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
+        print(
+            f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
     else:
         print(f"      {name}: {args}")
     try:
@@ -107,6 +155,7 @@ def confirm_action(name: str, args) -> bool:
     except EOFError:
         answer = ""
     return answer in ("y", "yes")
+
 
 def read_file(file_path: str) -> str:
     try:
@@ -120,6 +169,7 @@ def read_file(file_path: str) -> str:
             return f.read()
     except Exception as e:
         return f"Error reading file: {e}"
+
 
 def list_directory(dir_path: str) -> str:
     try:
@@ -152,6 +202,7 @@ def list_directory(dir_path: str) -> str:
     except Exception as e:
         return f"Error listing directory: {e}"
 
+
 def write_file(file_path: str, content: str) -> str:
     try:
         full = safe_path(file_path)
@@ -171,14 +222,18 @@ def write_file(file_path: str, content: str) -> str:
     except Exception as e:
         return f"Error writing file: {e}"
 
+
 def run_bash(command: str) -> str:
-    """Execute a bash command inside the project directory and return its output.
+    """Execute a shell command inside the project directory and return its output.
+
+    On Windows, commands run via cmd.exe (shell=True, no explicit executable).
+    On Unix/macOS, commands run via /bin/bash (or /bin/sh as fallback).
 
     Use this for git operations, running scripts, installing dependencies,
     or any shell-level task. The command runs in './' (ALLOWED_BASE) as working
     directory with a {BASH_TIMEOUT}s timeout.
 
-    Dangerous commands (rm -rf /, sudo, mkfs, etc.) are blocked for safety.
+    Dangerous commands are blocked for safety.
     """
     if not isinstance(command, str):
         return "Error: command must be a string."
@@ -186,15 +241,19 @@ def run_bash(command: str) -> str:
     if reason:
         return f"Error: {reason}"
     try:
-        result = subprocess.run(
-            command,
+        kwargs: dict = dict(
             capture_output=True,
             text=True,
             cwd=ALLOWED_BASE,
             timeout=BASH_TIMEOUT,
-            shell=True,
-            executable="/bin/bash",
+            shell=_SHELL_USE_SHELL,
         )
+        # Only pass executable when we have a concrete path (Unix)
+        if _SHELL_EXECUTABLE:
+            kwargs["executable"] = _SHELL_EXECUTABLE
+
+        result = subprocess.run(command, **kwargs)
+
         output_parts = []
         if result.stdout.strip():
             output_parts.append(result.stdout.rstrip("\n"))
@@ -210,13 +269,15 @@ def run_bash(command: str) -> str:
             return f"Command exited with code {result.returncode}.\n{output}"
         return output
     except FileNotFoundError:
-        return "Error: shell (/bin/bash) not found."
+        shell_name = "cmd.exe" if _IS_WINDOWS else (_SHELL_EXECUTABLE or "shell")
+        return f"Error: shell ({shell_name}) not found."
     except subprocess.TimeoutExpired:
         return f"Error: command timed out after {BASH_TIMEOUT}s."
     except PermissionError:
         return "Error: permission denied while running command."
     except Exception as e:
         return f"Error executing command: {e}"
+
 
 TOOL_HANDLERS = {
     "read_file": lambda args: read_file(args["file_path"]),
@@ -316,9 +377,11 @@ CLAUDE_CODE_BETA_FLAGS = (
     "cache-diagnosis-2026-04-07",
 )
 
+
 def claude_config_dir():
     override = os.environ.get("CLAUDE_CONFIG_DIR")
     return Path(override) if override else Path.home() / ".claude"
+
 
 def load_claude_code_token():
     creds_path = claude_config_dir() / ".credentials.json"
@@ -327,7 +390,8 @@ def load_claude_code_token():
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"Aviso: nao foi possivel ler {creds_path}: {exc}", file=sys.stderr)
+        print(
+            f"Aviso: nao foi possivel ler {creds_path}: {exc}", file=sys.stderr)
         return None
     oauth = data.get("claudeAiOauth") or {}
     token = oauth.get("accessToken")
@@ -338,8 +402,10 @@ def load_claude_code_token():
         print("Aviso: o token do Claude Code em ~/.claude parece expirado. Rode `claude` para renovar a sessao.", file=sys.stderr)
     return token
 
+
 def resolve_claude_token():
     return os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or load_claude_code_token()
+
 
 def claude_code_headers():
     return {
@@ -360,9 +426,11 @@ def claude_code_headers():
         "x-client-request-id": str(uuid.uuid4()),
     }
 
+
 def get_claude_client():
     if os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("ANTHROPIC_API_KEY esta setado; remova para evitar API billing.")
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY esta setado; remova para evitar API billing.")
     import anthropic
     token = resolve_claude_token()
     if not token:
@@ -370,6 +438,8 @@ def get_claude_client():
     return anthropic.Anthropic(auth_token=token, default_headers=claude_code_headers())
 
 # ─── Converter for Anthropic ───
+
+
 def convert_to_anthropic_tools(openai_tools):
     anthropic_tools = []
     for t in openai_tools:
@@ -379,6 +449,7 @@ def convert_to_anthropic_tools(openai_tools):
             "input_schema": t["function"]["parameters"]
         })
     return anthropic_tools
+
 
 def convert_messages_to_anthropic(messages):
     anthropic_msgs = []
@@ -400,7 +471,8 @@ def convert_messages_to_anthropic(messages):
                         "input": json.loads(tc["function"]["arguments"])
                     })
             if content:
-                anthropic_msgs.append({"role": "assistant", "content": content})
+                anthropic_msgs.append(
+                    {"role": "assistant", "content": content})
         elif m["role"] == "tool":
             last_msg = anthropic_msgs[-1] if anthropic_msgs else None
             block = {
@@ -414,9 +486,10 @@ def convert_messages_to_anthropic(messages):
                 anthropic_msgs.append({"role": "user", "content": [block]})
     return anthropic_msgs
 
+
 def main():
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
-    
+
     if provider == "deepseek":
         from openai import OpenAI
         client = OpenAI(
@@ -426,7 +499,8 @@ def main():
     elif provider == "claude":
         client = get_claude_client()
     else:
-        sys.exit(f"Provider desconhecido: {provider}. Use 'claude' ou 'deepseek'.")
+        sys.exit(
+            f"Provider desconhecido: {provider}. Use 'claude' ou 'deepseek'.")
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     session_tokens = {"prompt": 0, "completion": 0, "total": 0}
@@ -451,7 +525,7 @@ def main():
                     tools=tools,
                     tool_choice="auto",
                 )
-                
+
                 if not response.choices:
                     print("AI: Error: No response choices returned from the API.\n")
                     break
@@ -464,25 +538,27 @@ def main():
                     session_tokens["prompt"] += p_tokens
                     session_tokens["completion"] += c_tokens
                     session_tokens["total"] += t_tokens
-                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c")
+                    print(
+                        f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c")
 
                 assistant_msg = response.choices[0].message
                 messages.append(assistant_msg.model_dump(exclude_none=True))
-                
+
                 finish = response.choices[0].finish_reason
                 if finish != "tool_calls":
                     reply = (assistant_msg.content or "").strip()
                     print(f"AI: {reply}\n")
                     break
-                
+
                 tool_calls = assistant_msg.tool_calls
-                
+
             elif provider == "claude":
                 anthropic_messages = convert_messages_to_anthropic(messages)
-                system_prompt = next((m["content"] for m in messages if m["role"] == "system"), SYSTEM_PROMPT)
-                
+                system_prompt = next(
+                    (m["content"] for m in messages if m["role"] == "system"), SYSTEM_PROMPT)
+
                 response = client.messages.create(
-                    model="claude-3-7-sonnet-20250219",
+                    model="claude-sonnet-4-6",
                     max_tokens=16000,
                     system=[
                         {"type": "text", "text": CLAUDE_CODE_IDENTITY},
@@ -491,7 +567,7 @@ def main():
                     messages=anthropic_messages,
                     tools=convert_to_anthropic_tools(tools),
                 )
-                
+
                 usage = response.usage
                 if usage:
                     p_tokens = usage.input_tokens or 0
@@ -500,8 +576,9 @@ def main():
                     session_tokens["prompt"] += p_tokens
                     session_tokens["completion"] += c_tokens
                     session_tokens["total"] += t_tokens
-                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c")
-                
+                    print(
+                        f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c")
+
                 assistant_text = ""
                 tool_calls = []
                 for block in response.content:
@@ -516,12 +593,13 @@ def main():
                                 "arguments": json.dumps(block.input)
                             }
                         })
-                
-                assistant_msg = {"role": "assistant", "content": assistant_text}
+
+                assistant_msg = {"role": "assistant",
+                                 "content": assistant_text}
                 if tool_calls:
                     assistant_msg["tool_calls"] = tool_calls
                 messages.append(assistant_msg)
-                
+
                 if not tool_calls:
                     reply = assistant_text.strip()
                     print(f"AI: {reply}\n")
@@ -531,9 +609,11 @@ def main():
                 name = tc["function"]["name"]
                 raw_args = tc["function"]["arguments"]
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    args = json.loads(raw_args) if isinstance(
+                        raw_args, str) else raw_args
                     if not isinstance(args, dict):
-                        raise ValueError("tool arguments must be a JSON object")
+                        raise ValueError(
+                            "tool arguments must be a JSON object")
                 except (json.JSONDecodeError, ValueError) as e:
                     print(f"  🔧 [{name}] (failed to parse args: {raw_args})")
                     messages.append({
@@ -566,7 +646,9 @@ def main():
                     "content": result,
                 })
         else:
-            print(f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
+            print(
+                f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
+
 
 if __name__ == '__main__':
     main()
