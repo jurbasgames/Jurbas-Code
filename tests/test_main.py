@@ -170,9 +170,9 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # First response: tool call
     mock_response_1 = MagicMock()
-    mock_response_1.usage.prompt_tokens = 10
-    mock_response_1.usage.completion_tokens = 5
-    mock_response_1.usage.total_tokens = 15
+    mock_response_1.usage.prompt_tokens = None
+    mock_response_1.usage.completion_tokens = None
+    mock_response_1.usage.total_tokens = None
     mock_response_1.choices[0].finish_reason = "tool_calls"
     mock_tool_call = MagicMock()
     mock_tool_call.function.name = "read_file"
@@ -204,5 +204,5 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
     mock_print.assert_any_call("AI: Here is the content\n")
 
     # Check token metrics printing
-    mock_print.assert_any_call("  [Tokens] Request: 10p / 5c (15 total) | Session: 10p / 5c (15 total)")
-    mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 30p / 15c (45 total)")
+    mock_print.assert_any_call("  [Tokens] Request: 0p / 0c (0 total) | Session: 0p / 0c (0 total)")
+    mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 20p / 10c (30 total)")

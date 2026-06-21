@@ -221,9 +221,9 @@ def main():
             # ─── Token usage metrics ───
             usage = response.usage
             if usage:
-                p_tokens = usage.prompt_tokens
-                c_tokens = usage.completion_tokens
-                t_tokens = usage.total_tokens
+                p_tokens = usage.prompt_tokens or 0
+                c_tokens = usage.completion_tokens or 0
+                t_tokens = usage.total_tokens or 0
 
                 session_tokens["prompt"] += p_tokens
                 session_tokens["completion"] += c_tokens
