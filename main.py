@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ─── Security configuration ───
-ALLOWED_BASE = os.path.realpath("./")
+ALLOWED_BASE = os.path.realpath(os.path.dirname(__file__))
 MAX_TOOL_STEPS = 25
 BASH_TIMEOUT = 60*5
 
@@ -590,6 +590,10 @@ def main():
                 handler = TOOL_HANDLERS.get(name)
                 if handler is None:
                     result = f"Error: unknown tool '{name}'."
+                elif name == "read_file" and ".env" in args.get("file_path", ""):
+                    # Never read .env into the model context — it holds secrets
+                    # (API keys). Redact before touching the file at all.
+                    result = "<REDACTED: .env content is hidden from model for security>"
                 elif _requires_confirmation(name, args) and not confirm_action(name, args):
                     print("  ⛔ Declined.\n")
                     result = "Action declined by the user. Do not retry unless explicitly asked."

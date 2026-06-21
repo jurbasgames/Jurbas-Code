@@ -305,3 +305,41 @@ def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
         contents = [m["content"] for m in second_call_kwargs["messages"] if m["role"] == "user"]
         assert "hello" not in contents
         assert "retry_hello" in contents
+
+
+@patch('openai.OpenAI')
+@patch('builtins.input')
+@patch('builtins.print')
+def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
+    mock_input.side_effect = ["read env", "quit"]
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+
+    mock_response_1 = MagicMock()
+    mock_response_1.usage.prompt_tokens = None
+    mock_response_1.usage.completion_tokens = None
+    mock_response_1.usage.total_tokens = None
+    mock_response_1.choices[0].finish_reason = "tool_calls"
+    mock_tool_call = MagicMock()
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = '{"file_path": ".env"}'
+    mock_tool_call.id = "call_env"
+    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
+    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_env"}]}
+
+    mock_response_2 = MagicMock()
+    mock_response_2.usage.prompt_tokens = 10
+    mock_response_2.usage.completion_tokens = 5
+    mock_response_2.usage.total_tokens = 15
+    mock_response_2.choices[0].finish_reason = "stop"
+    mock_response_2.choices[0].message.content = "I read it"
+    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "I read it"}
+
+    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+        main.main()
+
+    call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
+    tool_result = [m for m in call_kwargs["messages"] if m["role"] == "tool"][0]
+    assert "<REDACTED: .env content is hidden from model for security>" in tool_result["content"]
