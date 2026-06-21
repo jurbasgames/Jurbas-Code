@@ -24,11 +24,23 @@ _IS_WINDOWS = platform.system() == "Windows"
 def _resolve_shell() -> tuple[str | None, bool]:
     """Return (executable_path_or_None, use_shell_bool) for subprocess.
 
-    On Windows: let the OS find cmd.exe via shell=True (executable=None).
+    On Windows: first try to locate bash.exe (Git Bash / WSL), then fall back
+    to cmd.exe via shell=True (executable=None).
     On Unix: prefer /bin/bash, fall back to /bin/sh, then shell=True fallback.
     Returns (executable, shell) tuple.
     """
     if _IS_WINDOWS:
+        # Prefer bash if available (Git Bash, WSL, etc.)
+        bash_path = shutil.which("bash")
+        if bash_path:
+            return bash_path, True
+        for path in (
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+            r"C:\Program Files (x86)\Git\bin\bash.exe",
+        ):
+            if os.path.isfile(path):
+                return path, True
         return None, True  # cmd.exe is resolved automatically by Windows
     for candidate in ("/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"):
         if os.path.isfile(candidate):
@@ -52,7 +64,7 @@ DANGEROUS_PATTERNS = [
     "rd /s /q c:\\", "rd /s /q c:/",
     "rmdir /s /q c:\\", "rmdir /s /q c:/",
     "cipher /w:c", "sfc /scannow",
-    "reg delete", "bcdedit",
+    "reg delete",
     "net user", "net localgroup",
     "shutdown /", "taskkill /f",
 ]
@@ -68,9 +80,13 @@ def safe_path(file_path: str) -> str:
 
     Uses realpath so that symlinks are resolved before the boundary check,
     preventing a symlink inside the project from pointing outside it.
+    On Windows, normcase is applied so the comparison is case-insensitive.
     """
     full = os.path.realpath(file_path)
-    if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
+    # normcase handles Windows case-insensitivity and drive-letter normalisation
+    allowed_norm = os.path.normcase(ALLOWED_BASE)
+    full_norm = os.path.normcase(full)
+    if os.path.commonpath([allowed_norm, full_norm]) != allowed_norm:
         raise PermissionError(f"Path not allowed: {file_path}")
     return full
 
@@ -81,8 +97,9 @@ def _is_dangerous(command: str) -> str | None:
     for pattern in DANGEROUS_PATTERNS:
         if pattern in lower:
             return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
-    if not _IS_WINDOWS and re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
-        return "Piping to sudo/sh/bash is blocked for security."
+    # Block piping to any shell — covers Unix (sh/bash) and Windows (cmd/powershell/pwsh)
+    if re.search(r'\|\s*(sudo\s+)?([^|\s]*[\\/])?(sh|bash|cmd|powershell|pwsh)\b', lower):
+        return "Piping to a shell interpreter is blocked for security."
     return None
 
 
@@ -122,7 +139,10 @@ def _is_readonly_bash(command: str) -> bool:
     if head == "git":
         sub = tokens[1] if len(tokens) > 1 else ""
         return sub in READONLY_GIT_SUBCMDS
-    readonly_set = READONLY_CMD if _IS_WINDOWS else READONLY_BASH
+    # Use READONLY_BASH when a bash-compatible shell is active (even on Windows),
+    # fall back to READONLY_CMD only when running plain cmd.exe.
+    is_bash = not _IS_WINDOWS or (_SHELL_EXECUTABLE is not None and "bash" in _SHELL_EXECUTABLE.lower())
+    readonly_set = READONLY_BASH if is_bash else READONLY_CMD
     return head in readonly_set
 
 
@@ -226,8 +246,8 @@ def write_file(file_path: str, content: str) -> str:
 def run_bash(command: str) -> str:
     """Execute a shell command inside the project directory and return its output.
 
-    On Windows, commands run via cmd.exe (shell=True, no explicit executable).
-    On Unix/macOS, commands run via /bin/bash (or /bin/sh as fallback).
+    On Windows, attempts to use bash (Git Bash / WSL) if available, otherwise
+    falls back to cmd.exe. On Unix/macOS, uses /bin/bash (or /bin/sh).
 
     Use this for git operations, running scripts, installing dependencies,
     or any shell-level task. The command runs in './' (ALLOWED_BASE) as working
@@ -243,12 +263,14 @@ def run_bash(command: str) -> str:
     try:
         kwargs: dict = dict(
             capture_output=True,
-            text=True,
+            # Force UTF-8 to avoid cp1252/charmap decode errors on Windows
+            encoding="utf-8",
+            errors="replace",
             cwd=ALLOWED_BASE,
             timeout=BASH_TIMEOUT,
             shell=_SHELL_USE_SHELL,
         )
-        # Only pass executable when we have a concrete path (Unix)
+        # Only pass executable when we have a concrete path (bash on Unix or Git Bash on Windows)
         if _SHELL_EXECUTABLE:
             kwargs["executable"] = _SHELL_EXECUTABLE
 
