@@ -5,6 +5,24 @@ import shutil
 import subprocess
 from openai import OpenAI
 
+# ─── Web search (optional dependency) ───
+try:
+    from duckduckgo_search import DDGS
+    HAS_WEB_SEARCH = True
+except ImportError:
+    HAS_WEB_SEARCH = False
+
+# ─── Shell detection ───
+def _find_shell() -> str | None:
+    """Find an available POSIX shell on the system, trying common paths."""
+    candidates = ["/bin/bash", "/bin/sh", "/usr/bin/bash", "/usr/bin/sh", "/bin/dash", "/bin/ash"]
+    for path in candidates:
+        if os.path.exists(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+SHELL_EXECUTABLE = _find_shell()
+
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
 MAX_TOOL_STEPS = 25  # safety cap on consecutive tool-call iterations
@@ -188,7 +206,7 @@ def write_file(file_path: str, content: str) -> str:
 
 
 def run_bash(command: str) -> str:
-    """Execute a bash command inside the project directory and return its output.
+    """Execute a shell command inside the project directory and return its output.
 
     Use this for git operations, running scripts, installing dependencies,
     or any shell-level task. The command runs in './' (ALLOWED_BASE) as working
@@ -204,6 +222,9 @@ def run_bash(command: str) -> str:
     if reason:
         return f"Error: {reason}"
 
+    if SHELL_EXECUTABLE is None:
+        return "Error: no POSIX shell found on this system."
+
     try:
         result = subprocess.run(
             command,
@@ -212,7 +233,7 @@ def run_bash(command: str) -> str:
             cwd=ALLOWED_BASE,
             timeout=BASH_TIMEOUT,
             shell=True,
-            executable="/bin/bash",
+            executable=SHELL_EXECUTABLE,
         )
         output_parts = []
         if result.stdout.strip():
@@ -229,7 +250,7 @@ def run_bash(command: str) -> str:
             return f"Command exited with code {result.returncode}.\n{output}"
         return output
     except FileNotFoundError:
-        return "Error: shell (/bin/bash) not found."
+        return f"Error: shell ({SHELL_EXECUTABLE}) not found."
     except subprocess.TimeoutExpired:
         return f"Error: command timed out after {BASH_TIMEOUT}s."
     except PermissionError:
@@ -238,12 +259,57 @@ def run_bash(command: str) -> str:
         return f"Error executing command: {e}"
 
 
+def web_search(query: str, max_results: int = 5) -> str:
+    """Search the web using DuckDuckGo (no API key required).
+
+    Returns a list of search results with title, URL, and snippet for each.
+    """
+    if not HAS_WEB_SEARCH:
+        return (
+            "Error: 'duckduckgo_search' library is not installed. "
+            "Install it with: uv add duckduckgo-search  (or pip install duckduckgo-search)"
+        )
+    if not isinstance(query, str) or not query.strip():
+        return "Error: query must be a non-empty string."
+    if not isinstance(max_results, int) or max_results < 1 or max_results > 20:
+        max_results = 5
+
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+    except Exception as e:
+        return f"Error performing web search: {e}"
+
+    if not results:
+        return f"No results found for '{query}'."
+
+    lines = [f"Web search results for '{query}':\n"]
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "(no title)").strip()
+        href = r.get("href", r.get("link", "")).strip()
+        snippet = r.get("body", r.get("snippet", "")).strip()
+        lines.append(f"{i}. {title}")
+        if href:
+            lines.append(f"   URL: {href}")
+        if snippet:
+            # Truncate long snippets for readability
+            snippet = (snippet[:300] + "...") if len(snippet) > 300 else snippet
+            lines.append(f"   {snippet}")
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
 # ─── Tool mapping ───
 TOOL_HANDLERS = {
     "read_file": lambda args: read_file(args["file_path"]),
     "list_directory": lambda args: list_directory(args["dir_path"]),
     "write_file": lambda args: write_file(args["file_path"], args["content"]),
     "run_bash": lambda args: run_bash(args["command"]),
+    "web_search": lambda args: web_search(
+        args["query"],
+        args.get("max_results", 5),
+    ),
 }
 
 # ─── System Prompt ───
@@ -258,6 +324,7 @@ SYSTEM_PROMPT = (
     "- Use list_directory to explore the project structure.\n"
     "- Use run_bash for any shell task: git, pip, python, ls, etc.\n"
     "- Prefer run_bash for git operations (git status, git add, git commit, git log).\n"
+    "- Use web_search to look up information on the internet.\n"
     "- Mutating actions (file writes, git commit/push, rm, installs) require user approval; if one is declined, adapt instead of retrying it."
 )
 
@@ -326,8 +393,8 @@ tools = [
         "function": {
             "name": "run_bash",
             "description": (
-                "Execute a bash command inside the project directory. "
-                "Use for git operations, running scripts, listing files, installing packages, etc. "
+                "Execute a shell command inside the project directory. "
+                "Use for git operations, running scripts, installing packages, etc. "
                 f"Timeout is {BASH_TIMEOUT}s. Dangerous commands are blocked."
             ),
             "parameters": {
@@ -335,10 +402,37 @@ tools = [
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "The bash command to execute (e.g.: 'git status', 'ls -la', 'python script.py')."
+                        "description": "The shell command to execute (e.g.: 'git status', 'ls -la', 'python script.py')."
                     }
                 },
                 "required": ["command"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web using DuckDuckGo (no API key required). "
+                "Use this to look up documentation, find code examples, research topics, "
+                "or get up-to-date information from the internet."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query (e.g.: 'Python asyncio tutorial')."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (1-20, default: 5).",
+                        "default": 5,
+                    },
+                },
+                "required": ["query"],
                 "additionalProperties": False,
             },
         },

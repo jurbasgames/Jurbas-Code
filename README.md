@@ -37,11 +37,11 @@ Check the full guide in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## 📋 Roadmap
 
-### 1. 🔧 Expand the tool set
+### 1. 🔧 Expand the tool set ✅
 
-| Tool | Description |
-|---|---|
-| `web_search` | Search the internet |
+| Tool | Description | Status |
+|---|---|---|
+| `web_search` | Search the internet using DuckDuckGo (no API key required) | ✅ **Done** |
 
 ---
 
@@ -93,14 +93,17 @@ python main.py "Explain the file ./src/utils.py"
 
 ---
 
+### 7. 🧠 Compression skills
+
+### 8. 📊 Auto Benchmarking
+
+### 9. 💾 Memory system with Mnemosyne
+
+---
+
 ## Running tests
 
 Run tests via uv:
 ```bash
 uv run pytest
 ```
-### Compression skills
-
-### Auto Benchmarking
-
-### Memory system with Mnemosyne
