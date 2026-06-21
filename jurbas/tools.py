@@ -12,7 +12,15 @@ except ImportError:
 
 
 
-from .security import ALLOWED_BASE, safe_path, is_secret_path, _is_dangerous
+from .security import (
+    ALLOWED_BASE,
+    safe_path,
+    is_secret_path,
+    _is_dangerous,
+    _SHELL_EXECUTABLE,
+    _SHELL_USE_SHELL,
+    _IS_WINDOWS,
+)
 
 # ─── BASH timeout constant ───
 BASH_TIMEOUT = 300
@@ -110,16 +118,20 @@ def run_bash(command: str) -> str:
     if reason:
         return f"Error: {reason}"
     try:
-        result = subprocess.run(
-            command,
+        kwargs: dict = dict(
             capture_output=True,
-            text=True,
+            # Force UTF-8 to avoid cp1252/charmap decode errors on Windows
+            encoding="utf-8",
+            errors="replace",
             cwd=ALLOWED_BASE,
             timeout=BASH_TIMEOUT,
-            shell=True,
-            executable="/bin/bash",
+            shell=_SHELL_USE_SHELL,
             stdin=subprocess.DEVNULL,
         )
+        if _SHELL_EXECUTABLE:
+            kwargs["executable"] = _SHELL_EXECUTABLE
+
+        result = subprocess.run(command, **kwargs)
         output_parts = []
         if result.stdout.strip():
             output_parts.append(result.stdout.rstrip("\n"))
@@ -135,7 +147,8 @@ def run_bash(command: str) -> str:
             return f"Command exited with code {result.returncode}.\n{output}"
         return output
     except FileNotFoundError:
-        return "Error: shell (/bin/bash) not found."
+        shell_name = "cmd.exe" if _IS_WINDOWS else (_SHELL_EXECUTABLE or "shell")
+        return f"Error: shell ({shell_name}) not found."
     except subprocess.TimeoutExpired:
         return f"Error: command timed out after {BASH_TIMEOUT}s."
     except PermissionError:

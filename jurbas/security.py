@@ -1,10 +1,42 @@
 """Security configuration: path validation, secret detection, and .env loading."""
 
 import os
+import platform
 import re
+import shutil
 
 # ─── Allowed base directory (anchored relative to this file's parent) ───
 ALLOWED_BASE = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+
+_IS_WINDOWS = platform.system() == "Windows"
+
+def _resolve_shell() -> tuple[str | None, bool]:
+    """Return (executable_path_or_None, use_shell_bool) for subprocess.
+
+    On Windows: first try to locate bash.exe (Git Bash / WSL), then fall back
+    to cmd.exe via shell=True (executable=None).
+    On Unix: prefer /bin/bash, fall back to /bin/sh, then shell=True fallback.
+    Returns (executable, shell) tuple.
+    """
+    if _IS_WINDOWS:
+        # Prefer bash if available (Git Bash, WSL, etc.)
+        bash_path = shutil.which("bash")
+        if bash_path:
+            return bash_path, True
+        for path in (
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+            r"C:\Program Files (x86)\Git\bin\bash.exe",
+        ):
+            if os.path.isfile(path):
+                return path, True
+        return None, True  # cmd.exe is resolved automatically by Windows
+    for candidate in ("/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"):
+        if os.path.isfile(candidate):
+            return candidate, True
+    return None, True  # last-resort: let the OS pick
+
+_SHELL_EXECUTABLE, _SHELL_USE_SHELL = _resolve_shell()
 
 # ─── Safety cap on consecutive tool-call iterations ───
 MAX_TOOL_STEPS = 25
@@ -30,6 +62,7 @@ def safe_path(file_path: str) -> str:
     Uses realpath so that symlinks are resolved before the boundary check,
     preventing a symlink inside the project from pointing outside it.
     Relative paths are resolved from the project root, not from the caller's CWD.
+    On Windows, normcase is applied so the comparison is case-insensitive.
     """
     path = file_path or "."
     if os.path.isabs(path):
@@ -37,7 +70,9 @@ def safe_path(file_path: str) -> str:
     else:
         full = os.path.realpath(os.path.join(ALLOWED_BASE, path))
     try:
-        if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
+        allowed_norm = os.path.normcase(ALLOWED_BASE)
+        full_norm = os.path.normcase(full)
+        if os.path.commonpath([allowed_norm, full_norm]) != allowed_norm:
             raise PermissionError(f"Path not allowed: {file_path}")
     except ValueError:
         raise PermissionError(f"Path not allowed: {file_path}")
@@ -84,14 +119,29 @@ def load_dotenv(file_path: str = ".env") -> None:
 
 # ─── Dangerous command checks ───
 DANGEROUS_PATTERNS = [
+    # Unix-style
     "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .",
-    "mkfs", "dd if=", "format", "fdisk",
+    "mkfs", "dd if=", "fdisk",
     ":(){ :|:& };:",
     "chmod 000", "chown -R",
     "> /dev/sda", "> /dev/sdb",
     "wget ", "curl ",
     "sudo ", "su ",
+    # Windows-style
+    "del /f /s /q c:\\", "del /f /s /q c:/",
+    "format c:", "format c:/",
+    "rd /s /q c:\\", "rd /s /q c:/",
+    "rmdir /s /q c:\\", "rmdir /s /q c:/",
+    "cipher /w:c", "sfc /scannow",
+    "reg delete",
+    "net user", "net localgroup",
+    "shutdown /", "taskkill /f",
 ]
+
+# On Windows 'format' is a built-in cmd command — keep the Windows-specific entry above
+# but exclude the bare Unix 'format' string to avoid false positives on Windows paths.
+if not _IS_WINDOWS:
+    DANGEROUS_PATTERNS.append("format")
 
 def _is_dangerous(command: str) -> str | None:
     """Check if a command contains blacklisted patterns. Returns a reason or None."""
@@ -99,15 +149,21 @@ def _is_dangerous(command: str) -> str | None:
     for pattern in DANGEROUS_PATTERNS:
         if pattern in lower:
             return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
-    if re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
-        return "Piping to sudo/sh/bash is blocked for security."
+    # Block piping to any shell — covers Unix (sh/bash) and Windows (cmd/powershell/pwsh)
+    if re.search(r'\|\s*(sudo\s+)?([^|\s]*[\\/])?(sh|bash|cmd|powershell|pwsh)\b', lower):
+        return "Piping to a shell interpreter is blocked for security."
     return None
 
 
 # ─── Readonly / mutation detection for Bash tool ───
 READONLY_BASH = {
     "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "tree",
-    "stat", "file", "which", "whoami", "date", "echo", "du", "df", "uname",
+    "stat", "file", "which", "whoami", "date", "echo", "env", "du", "df", "uname",
+}
+# Windows equivalents for read-only detection
+READONLY_CMD = {
+    "dir", "type", "echo", "date", "time", "ver", "whoami",
+    "where", "tree", "set", "path", "hostname",
 }
 READONLY_GIT_SUBCMDS = {
     "status", "log", "diff", "show",
@@ -132,11 +188,15 @@ def _is_readonly_bash(command: str) -> bool:
     tokens = cmd.split()
     if any(t in MUTATING_FLAGS for t in tokens):
         return False
-    head = tokens[0]
+    head = tokens[0].lower()
     if head == "git":
         sub = tokens[1] if len(tokens) > 1 else ""
         return sub in READONLY_GIT_SUBCMDS
-    return head in READONLY_BASH
+    # Use READONLY_BASH when a bash-compatible shell is active (even on Windows),
+    # fall back to READONLY_CMD only when running plain cmd.exe.
+    is_bash = not _IS_WINDOWS or (_SHELL_EXECUTABLE is not None and "bash" in _SHELL_EXECUTABLE.lower())
+    readonly_set = READONLY_BASH if is_bash else READONLY_CMD
+    return head in readonly_set
 
 
 def _requires_confirmation(name: str, args) -> bool:
