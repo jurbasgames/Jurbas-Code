@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
-from main import _is_dangerous, _is_readonly_bash, _requires_confirmation, confirm_action, run_bash
+from jurbas_code.agent import _is_dangerous, _is_readonly_bash, _requires_confirmation, run_bash
+from main import confirm_action
 
 class TestMain(unittest.TestCase):
     def test_is_dangerous(self):

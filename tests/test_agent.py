@@ -1,0 +1,150 @@
+import pytest
+import json
+from unittest.mock import MagicMock, patch
+from jurbas_code.agent import Agent
+
+@pytest.fixture
+def mock_client():
+    return MagicMock()
+
+def test_agent_final_assistant_reply(mock_client):
+    agent = Agent(mock_client, provider="deepseek")
+
+    mock_response = MagicMock()
+    mock_response.choices[0].finish_reason = "stop"
+    mock_response.choices[0].message.content = "Hello there!"
+    mock_response.choices[0].message.tool_calls = None
+    mock_response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Hello there!"}
+    mock_response.usage.prompt_tokens = 10
+    mock_response.usage.completion_tokens = 5
+    mock_response.usage.total_tokens = 15
+
+    mock_client.chat.completions.create.return_value = mock_response
+
+    on_ai_reply = MagicMock()
+    agent.chat("Hi", on_ai_reply=on_ai_reply)
+
+    on_ai_reply.assert_called_once_with("Hello there!")
+    assert agent.messages[-1] == {"role": "assistant", "content": "Hello there!"}
+    assert agent.session_tokens["total"] == 15
+
+def test_agent_tool_call_roundtrip(mock_client):
+    agent = Agent(mock_client, provider="deepseek")
+
+    # First response: tool call
+    mock_response_1 = MagicMock()
+    mock_response_1.choices[0].finish_reason = "tool_calls"
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "call_1"
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
+    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
+    mock_response_1.choices[0].message.model_dump.return_value = {
+        "role": "assistant",
+        "tool_calls": [{
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'}
+        }]
+    }
+    mock_response_1.usage.prompt_tokens = 10
+    mock_response_1.usage.completion_tokens = 10
+    mock_response_1.usage.total_tokens = 20
+
+    # Second response: final stop
+    mock_response_2 = MagicMock()
+    mock_response_2.choices[0].finish_reason = "stop"
+    mock_response_2.choices[0].message.content = "I read it."
+    mock_response_2.choices[0].message.tool_calls = None
+    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "I read it."}
+    mock_response_2.usage.prompt_tokens = 30
+    mock_response_2.usage.completion_tokens = 5
+    mock_response_2.usage.total_tokens = 35
+
+    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+
+    with patch("jurbas_code.agent.read_file", return_value="file content"):
+        on_tool_result = MagicMock()
+        agent.chat("Read test.txt", on_tool_result=on_tool_result)
+
+    on_tool_result.assert_called_once_with("read_file", "file content")
+    assert any(m["role"] == "tool" and m["content"] == "file content" for m in agent.messages)
+    assert agent.messages[-1]["content"] == "I read it."
+    assert agent.session_tokens["total"] == 55
+
+def test_agent_max_tool_steps(mock_client):
+    # Set max_tool_steps to 1 for easy testing
+    agent = Agent(mock_client, provider="deepseek", max_tool_steps=1)
+
+    mock_response = MagicMock()
+    mock_response.choices[0].finish_reason = "tool_calls"
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "call_1"
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
+    mock_response.choices[0].message.tool_calls = [mock_tool_call]
+    mock_response.choices[0].message.model_dump.return_value = {
+        "role": "assistant",
+        "tool_calls": [{
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'}
+        }]
+    }
+    mock_response.usage.prompt_tokens = 10
+    mock_response.usage.completion_tokens = 10
+    mock_response.usage.total_tokens = 20
+
+    mock_client.chat.completions.create.return_value = mock_response
+
+    on_ai_reply = MagicMock()
+    with patch("jurbas_code.agent.read_file", return_value="content"):
+        agent.chat("Keep reading", on_ai_reply=on_ai_reply)
+
+    on_ai_reply.assert_called_once_with("stopped after reaching the max of 1 tool steps.")
+
+def test_agent_invalid_tool_arguments(mock_client):
+    agent = Agent(mock_client, provider="deepseek")
+
+    mock_response_1 = MagicMock()
+    mock_response_1.choices[0].finish_reason = "tool_calls"
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "call_1"
+    mock_tool_call.function.name = "read_file"
+    # Invalid JSON
+    mock_tool_call.function.arguments = '{"file_path": "test.txt"'
+    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
+    mock_response_1.choices[0].message.model_dump.return_value = {
+        "role": "assistant",
+        "tool_calls": [{
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"' }
+        }]
+    }
+    mock_response_1.usage.prompt_tokens = 10
+    mock_response_1.usage.completion_tokens = 10
+    mock_response_1.usage.total_tokens = 20
+
+    mock_response_2 = MagicMock()
+    mock_response_2.choices[0].finish_reason = "stop"
+    mock_response_2.choices[0].message.content = "Fixed it."
+    mock_response_2.choices[0].message.tool_calls = None
+    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Fixed it."}
+    mock_response_2.usage.prompt_tokens = 20
+    mock_response_2.usage.completion_tokens = 5
+    mock_response_2.usage.total_tokens = 25
+
+    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+
+    on_tool_call = MagicMock()
+    agent.chat("Read it", on_tool_call=on_tool_call)
+
+    # Verify tool call callback was called with error
+    args, kwargs = on_tool_call.call_args
+    assert args[0] == "read_file"
+    assert "error" in kwargs
+
+    # Verify tool result message contains error
+    tool_msg = next(m for m in agent.messages if m["role"] == "tool")
+    assert "Error: invalid JSON arguments" in tool_msg["content"]
