@@ -34,6 +34,7 @@ def safe_path(file_path: str) -> str:
     return full
 
 def _is_dangerous(command: str) -> str | None:
+    """Check if a command contains blacklisted patterns. Returns a reason or None."""
     lower = command.lower().strip()
     for pattern in DANGEROUS_PATTERNS:
         if pattern in lower:
