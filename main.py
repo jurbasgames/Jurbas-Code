@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import re
@@ -346,7 +347,12 @@ tools = [
 ]
 
 
-def main():
+def main(args=None):
+    parser = argparse.ArgumentParser(
+        description="Jurbas-Code: A self-modifying terminal agent."
+    )
+    parser.parse_args(args)
+
     # ─── DeepSeek Client ───
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),

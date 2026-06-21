@@ -151,7 +151,7 @@ def test_main_loop_exit(mock_print, mock_input, mock_openai):
     # Setup to exit immediately
     mock_input.return_value = "exit"
 
-    main.main()
+    main.main(args=[])
 
     mock_openai.assert_called_once()
     mock_print.assert_not_called()
@@ -189,7 +189,7 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
     # Setup tool mock
     mock_read_file.return_value = "mocked file content"
 
-    main.main()
+    main.main(args=[])
 
     # Check if tool was actually called
     mock_read_file.assert_called_once_with("test.txt")
