@@ -86,6 +86,7 @@ def _requires_confirmation(name: str, args) -> bool:
     return False
 
 def confirm_action(name: str, args) -> bool:
+    """Prompt the user to approve a mutating action. Returns True if approved."""
     args = args if isinstance(args, dict) else {}
     print("\n  ⚠️  The agent wants to perform a mutating action:")
     if name == "run_bash":
