@@ -93,4 +93,31 @@ tools = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web using DuckDuckGo (no API key required). "
+                "Use this to look up documentation, find code examples, research topics, "
+                "or get up-to-date information from the internet."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query (e.g.: 'Python asyncio tutorial')."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (1-20, default: 5).",
+                        "default": 5,
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]

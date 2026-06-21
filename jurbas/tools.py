@@ -4,6 +4,14 @@ import os
 import shutil
 import subprocess
 
+try:
+    from duckduckgo_search import DDGS
+    HAS_WEB_SEARCH = True
+except ImportError:
+    HAS_WEB_SEARCH = False
+
+
+
 from .security import ALLOWED_BASE, safe_path, is_secret_path, _is_dangerous
 
 # ─── BASH timeout constant ───
@@ -136,6 +144,49 @@ def run_bash(command: str) -> str:
         return f"Error executing command: {e}"
 
 
+def web_search(query: str, max_results: int = 5) -> str:
+    """Search the web using DuckDuckGo (no API key required).
+
+    Returns a list of search results with title, URL, and snippet for each.
+    """
+    import main
+    if not getattr(main, "HAS_WEB_SEARCH", False):
+        return (
+            "Error: 'duckduckgo_search' library is not installed. "
+            "Install it with: uv add duckduckgo-search  (or pip install duckduckgo-search)"
+        )
+    if not isinstance(query, str) or not query.strip():
+        return "Error: query must be a non-empty string."
+    if not isinstance(max_results, int) or max_results < 1 or max_results > 20:
+        max_results = 5
+
+    try:
+        ddgs_class = getattr(main, "DDGS")
+        with ddgs_class() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+    except Exception as e:
+        return f"Error performing web search: {e}"
+
+    if not results:
+        return f"No results found for '{query}'."
+
+    lines = [f"Web search results for '{query}':\n"]
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "(no title)").strip()
+        href = r.get("href", r.get("link", "")).strip()
+        snippet = r.get("body", r.get("snippet", "")).strip()
+        lines.append(f"{i}. {title}")
+        if href:
+            lines.append(f"   URL: {href}")
+        if snippet:
+            # Truncate long snippets for readability
+            snippet = (snippet[:300] + "...") if len(snippet) > 300 else snippet
+            lines.append(f"   {snippet}")
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
 # ─── Handler registry ───
 
 TOOL_HANDLERS = {
@@ -143,4 +194,5 @@ TOOL_HANDLERS = {
     "list_directory": lambda args: list_directory(args["dir_path"]),
     "write_file":     lambda args: write_file(args["file_path"], args["content"]),
     "run_bash":       lambda args: run_bash(args["command"]),
+    "web_search":     lambda args: web_search(args["query"], args.get("max_results", 5)),
 }

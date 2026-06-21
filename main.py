@@ -13,6 +13,13 @@ import uuid
 import time
 from pathlib import Path
 
+try:
+    from duckduckgo_search import DDGS
+    HAS_WEB_SEARCH = True
+except ImportError:
+    DDGS = None
+    HAS_WEB_SEARCH = False
+
 # Re-export all public symbols so that ``import main`` and
 # ``from main import safe_path`` continue to work (backwards compat).
 from jurbas import (           # noqa: F401
@@ -32,6 +39,8 @@ from jurbas import (           # noqa: F401
     list_directory,
     write_file,
     run_bash,
+    web_search,
+    HAS_WEB_SEARCH,
 )
 from jurbas.git_utils import extract_git_info, analyze_pr  # noqa: F401
 

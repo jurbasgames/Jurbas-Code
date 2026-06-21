@@ -12,7 +12,7 @@ from .security import (
     confirm_action,
 )
 from .config import SYSTEM_PROMPT, tools
-from .tools import TOOL_HANDLERS, read_file, list_directory, write_file, run_bash
+from .tools import TOOL_HANDLERS, read_file, list_directory, write_file, run_bash, web_search, HAS_WEB_SEARCH
 
 __all__ = [
     "ALLOWED_BASE",
@@ -31,4 +31,6 @@ __all__ = [
     "list_directory",
     "write_file",
     "run_bash",
+    "web_search",
+    "HAS_WEB_SEARCH",
 ]

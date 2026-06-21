@@ -9,6 +9,7 @@ dependencies = [
     "anthropic>=0.92.0",
     "openai>=2.42.0",
     "python-dotenv>=1.0.0",
+    "duckduckgo-search>=8.0.0",
 ]
 
 [project.optional-dependencies]

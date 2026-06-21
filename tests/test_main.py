@@ -484,3 +484,157 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
     call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
     tool_result = [m for m in call_kwargs["messages"] if m["role"] == "tool"][0]
     assert "<REDACTED: .env content is hidden from model for security>" in tool_result["content"]
+
+
+# === TESTS FOR web_search() ===
+class TestWebSearch:
+    """Tests for the web_search tool using DuckDuckGo."""
+
+    def test_missing_library(self):
+        """Graceful message when duckduckgo_search is not installed."""
+        with patch('main.HAS_WEB_SEARCH', False):
+            result = main.web_search("test query")
+            assert "not installed" in result
+            assert "duckduckgo-search" in result
+
+    def test_empty_query(self):
+        """Empty or whitespace query should be rejected."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            assert "non-empty string" in main.web_search("")
+            assert "non-empty string" in main.web_search("   ")
+
+    def test_non_string_query(self):
+        """Non-string query should be rejected."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            assert "non-empty string" in main.web_search(123)
+            assert "non-empty string" in main.web_search(None)
+            assert "non-empty string" in main.web_search([])
+
+    @patch('main.DDGS')
+    def test_max_results_clamped_low(self, mock_ddgs_class):
+        """max_results < 1 should be clamped to default 5."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = []
+
+            main.web_search("python", max_results=0)
+            mock_instance.text.assert_called_with("python", max_results=5)
+
+    @patch('main.DDGS')
+    def test_max_results_clamped_high(self, mock_ddgs_class):
+        """max_results > 20 should be clamped to default 5."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = []
+
+            main.web_search("python", max_results=100)
+            mock_instance.text.assert_called_with("python", max_results=5)
+
+    @patch('main.DDGS')
+    def test_successful_search(self, mock_ddgs_class):
+        """Valid search returns formatted results."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = [
+                {"title": "Pytest Docs", "href": "https://docs.pytest.org", "body": "Full pytest documentation."},
+            ]
+
+            result = main.web_search("pytest", max_results=1)
+
+            assert "Web search results for 'pytest'" in result
+            assert "1. Pytest Docs" in result
+            assert "https://docs.pytest.org" in result
+            assert "Full pytest documentation" in result
+            mock_instance.text.assert_called_once_with("pytest", max_results=1)
+
+    @patch('main.DDGS')
+    def test_no_results(self, mock_ddgs_class):
+        """Empty result list from DDGS."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = []
+
+            result = main.web_search("nonexistent_xyz")
+            assert "No results found" in result
+
+    @patch('main.DDGS')
+    def test_link_fallback(self, mock_ddgs_class):
+        """Use 'link' key when 'href' is not present."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = [
+                {"title": "Example", "link": "https://example.org", "body": "Example."},
+            ]
+
+            result = main.web_search("example", max_results=1)
+            assert "https://example.org" in result
+
+    @patch('main.DDGS')
+    def test_snippet_truncation(self, mock_ddgs_class):
+        """Long snippets are truncated at 300 characters."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            long_body = "A" * 500
+            mock_instance.text.return_value = [
+                {"title": "Long", "href": "https://long.com", "body": long_body},
+            ]
+
+            result = main.web_search("long", max_results=1)
+            # Truncated to 300 chars + "..."
+            assert "..." in result
+            # Should not contain the full 500 chars
+            assert long_body not in result
+
+    @patch('main.DDGS')
+    def test_api_error(self, mock_ddgs_class):
+        """DDGS exception is caught and reported."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.side_effect = Exception("Rate limit exceeded")
+
+            result = main.web_search("python")
+            assert "Error performing web search" in result
+            assert "Rate limit exceeded" in result
+
+    @patch('main.DDGS')
+    def test_multiple_results_formatting(self, mock_ddgs_class):
+        """Multiple results are numbered and separated."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = [
+                {"title": "Result A", "href": "https://a.com", "body": "First result."},
+                {"title": "Result B", "href": "https://b.com", "body": "Second result."},
+                {"title": "Result C", "href": "https://c.com", "body": "Third result."},
+            ]
+
+            result = main.web_search("test", max_results=3)
+
+            assert result.count("\n   URL:") == 3  # Three URLs
+            assert "1. Result A" in result
+            assert "2. Result B" in result
+            assert "3. Result C" in result
+            mock_instance.text.assert_called_once_with("test", max_results=3)
+
+    @patch('main.DDGS')
+    def test_missing_fields_in_result(self, mock_ddgs_class):
+        """Result with missing optional fields (title/href/body) should not crash."""
+        with patch('main.HAS_WEB_SEARCH', True):
+            mock_instance = MagicMock()
+            mock_ddgs_class.return_value.__enter__.return_value = mock_instance
+            mock_instance.text.return_value = [
+                {},  # Completely empty result
+                {"title": "Only Title"},  # Missing href and body
+                {"href": "https://nolabel.com"},  # Missing title and body
+            ]
+
+            result = main.web_search("weird", max_results=3)
+            # Should not crash; should handle gracefully
+            assert "(no title)" in result or "Only Title" in result
