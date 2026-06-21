@@ -9,15 +9,14 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-import main
-
+from jurbas_code import providers
 
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
 class ClaudeCodeHeadersTests(unittest.TestCase):
     def test_headers_match_interactive_claude_capture(self) -> None:
-        headers = main.claude_code_headers()
+        headers = providers.claude_code_headers()
 
         self.assertEqual(headers["User-Agent"], "claude-cli/2.1.183 (external, cli)")
         self.assertEqual(headers["x-app"], "cli")
@@ -33,7 +32,7 @@ class ClaudeCodeHeadersTests(unittest.TestCase):
     def test_claude_client_refuses_api_key_billing_path(self) -> None:
         with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}):
             with self.assertRaisesRegex(RuntimeError, "API billing"):
-                main.get_claude_client()
+                providers.get_claude_client()
 
 
 if __name__ == "__main__":
