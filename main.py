@@ -438,7 +438,7 @@ def main():
         if not api_key:
             print("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
             sys.exit(1)
-        from openai import OpenAI, AuthenticationError, APIError
+        from openai import OpenAI, AuthenticationError, APIError, RateLimitError, APITimeoutError
         client = OpenAI(
             api_key=api_key,
             base_url="https://api.deepseek.com",
@@ -475,6 +475,12 @@ def main():
                 except AuthenticationError as e:
                     print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
                     sys.exit(1)
+                except RateLimitError as e:
+                    print(f"AI: Rate Limit Error: {e}\n")
+                    break
+                except APITimeoutError as e:
+                    print(f"AI: Timeout Error: {e}\n")
+                    break
                 except APIError as e:
                     print(f"AI: API Error: {e}")
                     # Drop the failed turn (user prompt and any partial tool interactions)
