@@ -144,91 +144,130 @@ def test_write_file_permission_error(mock_safe_path):
     assert "Error: Path not allowed" in main.write_file("test.txt", "content")
 
 # === TESTS FOR main() ===
+@patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test-key"})
 @patch('main.OpenAI')
 @patch('builtins.input')
 @patch('builtins.print')
 def test_main_loop_exit(mock_print, mock_input, mock_openai):
     # Setup to exit immediately
-    with patch('os.environ.get', return_value="sk-test-key"):
-        mock_input.return_value = "exit"
-        main.main()
-        mock_openai.assert_called_once()
-        mock_print.assert_not_called()
+    mock_input.return_value = "exit"
 
+    main.main()
+
+    mock_openai.assert_called_once()
+    mock_print.assert_not_called()
+
+@patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test-key"})
 @patch('main.OpenAI')
 @patch('builtins.input')
 @patch('builtins.print')
 @patch('main.read_file')
 def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_openai):
     # Input first iteration "do something", second iteration "quit"
-    with patch('os.environ.get', return_value="sk-test-key"):
-        mock_input.side_effect = ["read something", "quit"]
+    mock_input.side_effect = ["read something", "quit"]
 
-        # Setup OpenAI client mock
+    # Setup OpenAI client mock
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+
+    # First response: tool call
+    mock_response_1 = MagicMock()
+    mock_response_1.choices[0].finish_reason = "tool_calls"
+    mock_tool_call = MagicMock()
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
+    mock_tool_call.id = "call_123"
+    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
+    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
+    mock_response_1.usage = None
+
+    # Second response (after tool result): final text
+    mock_response_2 = MagicMock()
+    mock_response_2.choices[0].finish_reason = "stop"
+    mock_response_2.choices[0].message.content = "Here is the content"
+    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
+    mock_response_2.usage = MagicMock(prompt_tokens=20, completion_tokens=10, total_tokens=30)
+
+    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+
+    # Setup tool mock
+    mock_read_file.return_value = "mocked file content"
+
+    main.main()
+
+    # Check if tool was actually called
+    mock_read_file.assert_called_once_with("test.txt")
+
+    # Check if AI's final text was printed
+    mock_print.assert_any_call("AI: Here is the content\n")
+
+    # Check token metrics printing
+    mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 20p / 10c (30 total)")
+
+@patch.dict(os.environ, {"LLM_PROVIDER": "deepseek"}, clear=True)
+def test_main_missing_api_key():
+    with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+        with patch('builtins.print') as mock_print:
+            with pytest.raises(SystemExit):
+                main.main()
+            mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+            mock_exit.assert_called_once_with(1)
+
+@patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test-key"})
+def test_main_authentication_error_exits():
+    # Mocking first interaction results in AuthenticationError, which should exit the program
+    with patch('main.OpenAI') as mock_openai:
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
 
-        # First response: tool call
-        mock_response_1 = MagicMock()
-        mock_response_1.choices[0].finish_reason = "tool_calls"
-        mock_tool_call = MagicMock()
-        mock_tool_call.function.name = "read_file"
-        mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
-        mock_tool_call.id = "call_123"
-        mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
-        mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
-        mock_response_1.usage = None
+        from openai import AuthenticationError
+        mock_client.chat.completions.create.side_effect = AuthenticationError(
+            message="Invalid API Key",
+            response=MagicMock(),
+            body={}
+        )
 
-        # Second response (after tool result): final text
-        mock_response_2 = MagicMock()
-        mock_response_2.choices[0].finish_reason = "stop"
-        mock_response_2.choices[0].message.content = "Here is the content"
-        mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
-        mock_response_2.usage = MagicMock(prompt_tokens=20, completion_tokens=10, total_tokens=30)
+        with patch('builtins.input', side_effect=["hello"]):
+            with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+                with patch('builtins.print') as mock_print:
+                    with pytest.raises(SystemExit):
+                        main.main()
+                    mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-t' is invalid or expired. Invalid API Key")
+                    mock_exit.assert_called_once_with(1)
 
-        mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+# === TESTS FOR run_bash and security ===
+def test_is_dangerous():
+    assert main._is_dangerous("ls | sudo tee file") is not None
+    assert main._is_dangerous("cat file | bash") is not None
+    assert main._is_dangerous("cat file |   sudo -i") is not None
+    assert main._is_dangerous("ls | grep something") is None
 
-        # Setup tool mock
-        mock_read_file.return_value = "mocked file content"
+def test_dangerous_patterns():
+    assert main._is_dangerous("echo ok && rm -rf /") is not None
+    assert main._is_dangerous("rm -rf /") is not None
 
-        main.main()
+def test_is_readonly_bash():
+    assert not main._is_readonly_bash(123)
+    assert not main._is_readonly_bash(None)
+    assert main._is_readonly_bash("ls -la")
+    assert not main._is_readonly_bash("ls -la && echo ok")
+    assert not main._is_readonly_bash("rm -rf /")
 
-        # Check if tool was actually called
-        mock_read_file.assert_called_once_with("test.txt")
+def test_requires_confirmation():
+    assert main._requires_confirmation("write_file", {"file_path": "a.txt", "content": "a"})
+    assert main._requires_confirmation("run_bash", {"command": "echo ok && ls"})
+    assert not main._requires_confirmation("run_bash", {"command": "ls"})
+    # Non-dict args should require confirmation to be safe
+    assert main._requires_confirmation("run_bash", "echo ok")
+    assert main._requires_confirmation("run_bash", 123)
+    assert main._requires_confirmation("write_file", None)
 
-        # Check if AI's final text was printed
-        mock_print.assert_any_call("AI: Here is the content\n")
+def test_run_bash_non_string():
+    assert main.run_bash(123) == "Error: command must be a string."
+    assert main.run_bash(None) == "Error: command must be a string."
 
-        # Check token metrics printing
-        mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 20p / 10c (30 total)")
-
-def test_main_missing_api_key():
-    with patch('os.environ.get', return_value=None):
-        with patch('sys.exit', side_effect=SystemExit) as mock_exit:
-            with patch('builtins.print') as mock_print:
-                with pytest.raises(SystemExit):
-                    main.main()
-                mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
-                mock_exit.assert_called_once_with(1)
-
-def test_main_authentication_error_exits():
-    # Mocking first interaction results in AuthenticationError, which should exit the program
-    with patch('os.environ.get', return_value="sk-test-key"):
-        with patch('main.OpenAI') as mock_openai:
-            mock_client = MagicMock()
-            mock_openai.return_value = mock_client
-
-            from openai import AuthenticationError
-            mock_client.chat.completions.create.side_effect = AuthenticationError(
-                message="Invalid API Key",
-                response=MagicMock(),
-                body={}
-            )
-
-            with patch('builtins.input', side_effect=["hello"]):
-                with patch('sys.exit', side_effect=SystemExit) as mock_exit:
-                    with patch('builtins.print') as mock_print:
-                        with pytest.raises(SystemExit):
-                            main.main()
-                        mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-t' is invalid or expired. Invalid API Key")
-                        mock_exit.assert_called_once_with(1)
+@patch('builtins.input', return_value='y')
+def test_confirm_action(mock_input):
+    assert main.confirm_action("run_bash", {"command": "ls"})
+    assert main.confirm_action("run_bash", "ls") # Non-dict
+    assert main.confirm_action("run_bash", None) # Non-dict
