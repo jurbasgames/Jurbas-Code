@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 import os
 import sys
@@ -143,20 +144,35 @@ def test_write_file_permission_error(mock_safe_path):
     mock_safe_path.side_effect = PermissionError("Path not allowed")
     assert "Error: Path not allowed" in main.write_file("test.txt", "content")
 
+
+def test_normalize_tool_call_accepts_function_dict():
+    tool_call = SimpleNamespace(
+        id="call_123",
+        type="function",
+        function={"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    )
+
+    assert main.normalize_tool_call(tool_call) == {
+        "id": "call_123",
+        "type": "function",
+        "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    }
+
 # === TESTS FOR main() ===
-@patch('main.OpenAI')
+@patch('openai.OpenAI')
 @patch('builtins.input')
 @patch('builtins.print')
 def test_main_loop_exit(mock_print, mock_input, mock_openai):
     # Setup to exit immediately
     mock_input.return_value = "exit"
 
-    main.main()
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+        main.main()
 
     mock_openai.assert_called_once()
-    mock_print.assert_any_call(f"Jurbas-Code v{main.VERSION}")
+    mock_print.assert_not_called()
 
-@patch('main.OpenAI')
+@patch('openai.OpenAI')
 @patch('builtins.input')
 @patch('builtins.print')
 @patch('main.read_file')
@@ -170,6 +186,9 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # First response: tool call
     mock_response_1 = MagicMock()
+    mock_response_1.usage.prompt_tokens = None
+    mock_response_1.usage.completion_tokens = None
+    mock_response_1.usage.total_tokens = None
     mock_response_1.choices[0].finish_reason = "tool_calls"
     mock_tool_call = MagicMock()
     mock_tool_call.function.name = "read_file"
@@ -180,6 +199,9 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
 
     # Second response (after tool result): final text
     mock_response_2 = MagicMock()
+    mock_response_2.usage.prompt_tokens = 20
+    mock_response_2.usage.completion_tokens = 10
+    mock_response_2.usage.total_tokens = 30
     mock_response_2.choices[0].finish_reason = "stop"
     mock_response_2.choices[0].message.content = "Here is the content"
     mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
@@ -189,7 +211,8 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
     # Setup tool mock
     mock_read_file.return_value = "mocked file content"
 
-    main.main()
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+        main.main()
 
     # Check if tool was actually called
     mock_read_file.assert_called_once_with("test.txt")
@@ -197,7 +220,94 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_o
     # Check if AI's final text was printed
     mock_print.assert_any_call("AI: Here is the content\n")
 
+    # Check token metrics printing
+    mock_print.assert_any_call("  [Tokens] Request: 0p / 0c (0 total) | Session: 0p / 0c (0 total)")
+    mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 20p / 10c (30 total)")
 
+
+def test_readonly_bash_safety_gates():
+    # env, git branch, and git remote should not be autoapproved (return False)
+    assert main._is_readonly_bash("env") is False
+    assert main._is_readonly_bash("git branch") is False
+    assert main._is_readonly_bash("git remote") is False
+    assert main._is_readonly_bash("ls") is True
+
+
+@patch('subprocess.run')
+def test_run_bash_uses_devnull(mock_run):
+    import subprocess
+    mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+    main.run_bash("ls")
+    mock_run.assert_called_once()
+    _, kwargs = mock_run.call_args
+    assert kwargs.get("stdin") == subprocess.DEVNULL
+
+
+@patch('builtins.print')
+def test_main_missing_deepseek_api_key(mock_print):
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "   "}):
+        with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+            with pytest.raises(SystemExit):
+                main.main()
+            mock_exit.assert_called_once_with(1)
+            mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+
+
+@patch('openai.OpenAI')
+@patch('builtins.input')
+@patch('builtins.print')
+def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
+    from openai import AuthenticationError
+
+    mock_input.side_effect = ["hello"]
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+
+    err = AuthenticationError("Invalid API Key", response=MagicMock(), body={})
+    mock_client.chat.completions.create.side_effect = err
+
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-123456789"}):
+        with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+            with pytest.raises(SystemExit):
+                main.main()
+            mock_exit.assert_called_once_with(1)
+            mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-1' is invalid or expired. Invalid API Key")
+
+
+@patch('openai.OpenAI')
+@patch('builtins.input')
+@patch('builtins.print')
+def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
+    from openai import APIError
+
+    mock_input.side_effect = ["hello", "retry_hello", "quit"]
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+
+    err = APIError("Rate limit exceeded", request=MagicMock(), body={})
+
+    mock_response = MagicMock()
+    mock_response.usage.prompt_tokens = 5
+    mock_response.usage.completion_tokens = 5
+    mock_response.usage.total_tokens = 10
+    mock_response.choices[0].finish_reason = "stop"
+    mock_response.choices[0].message.content = "Success response"
+    mock_response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Success response"}
+
+    mock_client.chat.completions.create.side_effect = [err, mock_response]
+
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+        main.main()
+
+        assert mock_client.chat.completions.create.call_count == 2
+
+        second_call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
+        contents = [m["content"] for m in second_call_kwargs["messages"] if m["role"] == "user"]
+        assert "hello" not in contents
+        assert "retry_hello" in contents
+
+
+# === TESTS FOR versioning (PR#18 additions) ===
 def test_main_version_flag():
     with patch('sys.argv', ['main.py', '--version']):
         with patch('sys.exit', side_effect=SystemExit(0)) as mock_exit:
