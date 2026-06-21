@@ -149,12 +149,11 @@ def test_write_file_permission_error(mock_safe_path):
 @patch('builtins.print')
 def test_main_loop_exit(mock_print, mock_input, mock_openai):
     # Setup to exit immediately
-    mock_input.return_value = "exit"
-
-    main.main()
-
-    mock_openai.assert_called_once()
-    mock_print.assert_not_called()
+    with patch('os.environ.get', return_value="sk-test-key"):
+        mock_input.return_value = "exit"
+        main.main()
+        mock_openai.assert_called_once()
+        mock_print.assert_not_called()
 
 @patch('main.OpenAI')
 @patch('builtins.input')
@@ -162,40 +161,46 @@ def test_main_loop_exit(mock_print, mock_input, mock_openai):
 @patch('main.read_file')
 def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_openai):
     # Input first iteration "do something", second iteration "quit"
-    mock_input.side_effect = ["read something", "quit"]
+    with patch('os.environ.get', return_value="sk-test-key"):
+        mock_input.side_effect = ["read something", "quit"]
 
-    # Setup OpenAI client mock
-    mock_client = MagicMock()
-    mock_openai.return_value = mock_client
+        # Setup OpenAI client mock
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
 
-    # First response: tool call
-    mock_response_1 = MagicMock()
-    mock_response_1.choices[0].finish_reason = "tool_calls"
-    mock_tool_call = MagicMock()
-    mock_tool_call.function.name = "read_file"
-    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
-    mock_tool_call.id = "call_123"
-    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
-    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
+        # First response: tool call
+        mock_response_1 = MagicMock()
+        mock_response_1.choices[0].finish_reason = "tool_calls"
+        mock_tool_call = MagicMock()
+        mock_tool_call.function.name = "read_file"
+        mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
+        mock_tool_call.id = "call_123"
+        mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
+        mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
+        mock_response_1.usage = None
 
-    # Second response (after tool result): final text
-    mock_response_2 = MagicMock()
-    mock_response_2.choices[0].finish_reason = "stop"
-    mock_response_2.choices[0].message.content = "Here is the content"
-    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
+        # Second response (after tool result): final text
+        mock_response_2 = MagicMock()
+        mock_response_2.choices[0].finish_reason = "stop"
+        mock_response_2.choices[0].message.content = "Here is the content"
+        mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
+        mock_response_2.usage = MagicMock(prompt_tokens=20, completion_tokens=10, total_tokens=30)
 
-    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+        mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
 
-    # Setup tool mock
-    mock_read_file.return_value = "mocked file content"
+        # Setup tool mock
+        mock_read_file.return_value = "mocked file content"
 
-    main.main()
+        main.main()
 
-    # Check if tool was actually called
-    mock_read_file.assert_called_once_with("test.txt")
+        # Check if tool was actually called
+        mock_read_file.assert_called_once_with("test.txt")
 
-    # Check if AI's final text was printed
-    mock_print.assert_any_call("AI: Here is the content\n")
+        # Check if AI's final text was printed
+        mock_print.assert_any_call("AI: Here is the content\n")
+
+        # Check token metrics printing
+        mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 20p / 10c (30 total)")
 
 def test_main_missing_api_key():
     with patch('os.environ.get', return_value=None):
@@ -206,27 +211,24 @@ def test_main_missing_api_key():
                 mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
                 mock_exit.assert_called_once_with(1)
 
-def test_main_authentication_error_continues_loop():
-    # Mocking first interaction results in AuthenticationError, second in quit
+def test_main_authentication_error_exits():
+    # Mocking first interaction results in AuthenticationError, which should exit the program
     with patch('os.environ.get', return_value="sk-test-key"):
         with patch('main.OpenAI') as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
 
             from openai import AuthenticationError
-            # First call raises AuthenticationError, second isn't strictly necessary for the loop logic test
-            # as long as we break the tool loop and return to input()
             mock_client.chat.completions.create.side_effect = AuthenticationError(
                 message="Invalid API Key",
                 response=MagicMock(),
                 body={}
             )
 
-            with patch('builtins.input', side_effect=["hello", "quit"]) as mock_input:
-                with patch('builtins.print') as mock_print:
-                    main.main()
-
-                    # Verify it printed the error message
-                    mock_print.assert_any_call("AI: Authentication Error: sk-t****-key is invalid or expired. Invalid API Key")
-                    # Verify input was called twice, meaning it returned to the loop
-                    assert mock_input.call_count == 2
+            with patch('builtins.input', side_effect=["hello"]):
+                with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+                    with patch('builtins.print') as mock_print:
+                        with pytest.raises(SystemExit):
+                            main.main()
+                        mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-t' is invalid or expired. Invalid API Key")
+                        mock_exit.assert_called_once_with(1)
