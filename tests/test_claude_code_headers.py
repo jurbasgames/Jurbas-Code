@@ -30,7 +30,7 @@ class ClaudeCodeHeadersTests(unittest.TestCase):
         self.assertRegex(headers["X-Claude-Code-Session-Id"], UUID_RE)
         self.assertRegex(headers["x-client-request-id"], UUID_RE)
 
-    def test_get_claude_client_refuses_api_key_billing_path(self) -> None:
+    def test_claude_client_refuses_api_key_billing_path(self) -> None:
         with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}):
             with self.assertRaisesRegex(RuntimeError, "API billing"):
                 main.get_claude_client()
