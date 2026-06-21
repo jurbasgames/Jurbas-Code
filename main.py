@@ -190,10 +190,11 @@ def run_bash(command: str) -> str:
             command,
             capture_output=True,
             text=True,
+            errors="replace",
             cwd=ALLOWED_BASE,
             timeout=BASH_TIMEOUT,
             shell=True,
-            executable="/bin/bash",
+            executable="/bin/bash" if os.name != "nt" else None,
         )
         output_parts = []
         if result.stdout.strip():
@@ -210,7 +211,7 @@ def run_bash(command: str) -> str:
             return f"Command exited with code {result.returncode}.\n{output}"
         return output
     except FileNotFoundError:
-        return "Error: shell (/bin/bash) not found."
+        return f"Error: shell ({'/bin/bash' if os.name != 'nt' else 'default'}) not found."
     except subprocess.TimeoutExpired:
         return f"Error: command timed out after {BASH_TIMEOUT}s."
     except PermissionError:
