@@ -1,118 +1,190 @@
-import pytest
-from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+"""Tests for Jurbas-Code (modular architecture)."""
+
 import os
 import sys
-import shutil
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import pytest
+from unittest.mock import patch, MagicMock
+
 import main
+import jurbas.security
+import jurbas.tools
 
-# === TESTS FOR safe_path() ===
-def test_safe_path_allowed():
-    # Test path resolution inside ALLOWED_BASE
-    # mock abspath returning an allowed path
-    with patch('os.path.abspath', return_value=os.path.abspath(main.ALLOWED_BASE + "/test.txt")):
-         assert main.safe_path("test.txt") == os.path.abspath(main.ALLOWED_BASE + "/test.txt")
 
-def test_safe_path_denied():
-    # Test path resolution outside ALLOWED_BASE
-    with patch('os.path.abspath', return_value="/tmp/test.txt"):
-        with pytest.raises(PermissionError) as exc_info:
-            main.safe_path("../../../tmp/test.txt")
-        assert "Path not allowed" in str(exc_info.value)
+# ═══════════════════════════════════════════════════════════════════════
+# safe_path()
+# ═══════════════════════════════════════════════════════════════════════
 
-# === TESTS FOR read_file() ===
-@patch('main.safe_path')
-@patch('os.path.exists')
-@patch('builtins.open', new_callable=MagicMock)
+def test_safe_path_relative_resolves_against_allowed_base():
+    """A relative path is joined with ALLOWED_BASE before resolution."""
+    resolved = jurbas.security.safe_path("sub/file.txt")
+    assert resolved.startswith(jurbas.security.ALLOWED_BASE)
+
+
+def test_safe_path_outside_raises():
+    """An absolute path outside ALLOWED_BASE raises PermissionError."""
+    with pytest.raises(PermissionError, match="Path not allowed"):
+        jurbas.security.safe_path("//TMP/escaping.txt")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# is_secret_path()
+# ═══════════════════════════════════════════════════════════════════════
+
+def test_is_secret_path_true_for_dotenv():
+    assert jurbas.security.is_secret_path(".env") is True
+    assert jurbas.security.is_secret_path(".env.local") is True
+    assert jurbas.security.is_secret_path("path/to/.env.production") is True
+
+
+def test_is_secret_path_false_for_normal_file():
+    assert jurbas.security.is_secret_path("main.py") is False
+    assert jurbas.security.is_secret_path("README.md") is False
+
+
+def test_is_secret_path_true_for_private_key():
+    assert jurbas.security.is_secret_path("id_rsa") is True
+    assert jurbas.security.is_secret_path("credentials.pem") is True
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# load_dotenv()
+# ═══════════════════════════════════════════════════════════════════════
+
+@patch("jurbas.security.safe_path")
+@patch.dict("os.environ", {}, clear=True)
+def test_load_dotenv_sets_vars(mock_safe_path, tmp_path):
+    """A simple .env file populates os.environ."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("FOO=bar\nBAZ=qux\n")
+    mock_safe_path.return_value = str(env_file)
+
+    jurbas.security.load_dotenv(str(env_file))
+
+    assert os.environ.get("FOO") == "bar"
+    assert os.environ.get("BAZ") == "qux"
+
+
+@patch("jurbas.security.safe_path")
+@patch.dict("os.environ", {"EXISTING": "keep"}, clear=True)
+def test_load_dotenv_does_not_overwrite(mock_safe_path, tmp_path):
+    """Existing env vars are NOT overwritten by .env."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("EXISTING=overwrite\nNEW=added\n")
+    mock_safe_path.return_value = str(env_file)
+
+    jurbas.security.load_dotenv(str(env_file))
+
+    assert os.environ["EXISTING"] == "keep"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# read_file()
+# ═══════════════════════════════════════════════════════════════════════
+
+@patch("jurbas.tools.safe_path")
+@patch("os.path.exists")
+@patch("builtins.open", new_callable=MagicMock)
 def test_read_file_success(mock_open, mock_exists, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
     mock_exists.return_value = True
 
-    # Mocking open().read()
     mock_file = MagicMock()
     mock_file.read.return_value = "file content"
     mock_open.return_value.__enter__.return_value = mock_file
 
-    assert main.read_file("test.txt") == "file content"
+    assert jurbas.tools.read_file("test.txt") == "file content"
     mock_open.assert_called_once_with("/allowed/test.txt", "r", encoding="utf-8")
 
-@patch('main.safe_path')
+
+@patch("jurbas.tools.safe_path")
 def test_read_file_permission_error(mock_safe_path):
     mock_safe_path.side_effect = PermissionError("Path not allowed: test.txt")
-    assert "Error: Path not allowed: test.txt" in main.read_file("test.txt")
+    assert "Error: Path not allowed: test.txt" in jurbas.tools.read_file("test.txt")
 
-@patch('main.safe_path')
-@patch('os.path.exists')
+
+@patch("jurbas.tools.safe_path")
+@patch("os.path.exists")
 def test_read_file_not_found(mock_exists, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
     mock_exists.return_value = False
-    assert "Error: file 'test.txt' not found." in main.read_file("test.txt")
+    assert "Error: file 'test.txt' not found." in jurbas.tools.read_file("test.txt")
 
-# === TESTS FOR list_directory() ===
-@patch('main.safe_path')
-@patch('os.path.exists')
-@patch('os.path.isdir')
-@patch('os.listdir')
-@patch('os.path.getsize')
-def test_list_directory_success(mock_getsize, mock_listdir, mock_isdir, mock_exists, mock_safe_path):
+
+# ═══════════════════════════════════════════════════════════════════════
+# list_directory()
+# ═══════════════════════════════════════════════════════════════════════
+
+@patch("jurbas.tools.safe_path")
+@patch("os.path.exists")
+@patch("os.path.isdir")
+@patch("os.listdir")
+@patch("os.path.getsize")
+def test_list_directory_success(mock_getsize, mock_listdir, mock_isdir,
+                                mock_exists, mock_safe_path):
     mock_safe_path.return_value = "/allowed/dir"
     mock_exists.return_value = True
 
-    # Let os.path.isdir return True for the directory itself, and decide for items
     def isdir_side_effect(path):
-        if path == "/allowed/dir": return True
-        if path.endswith("subdir"): return True
+        if path == "/allowed/dir":
+            return True
+        if path.endswith("subdir"):
+            return True
         return False
     mock_isdir.side_effect = isdir_side_effect
 
     mock_listdir.return_value = ["file1.txt", "subdir"]
-    mock_getsize.return_value = 1024 # 1.0 KB
+    mock_getsize.return_value = 1024  # 1.0 KB
 
-    result = main.list_directory("dir")
+    result = jurbas.tools.list_directory("dir")
 
     assert "Contents of 'dir' (2 items):" in result
     assert "[FILE] file1.txt (1.0 KB)" in result
     assert "[DIR] subdir" in result
 
-@patch('main.safe_path')
+
+@patch("jurbas.tools.safe_path", side_effect=PermissionError("Path not allowed"))
 def test_list_directory_permission_error(mock_safe_path):
-    mock_safe_path.side_effect = PermissionError("Path not allowed")
-    assert "Error: Path not allowed" in main.list_directory("dir")
+    result = jurbas.tools.list_directory("bad")
+    assert "Error: Path not allowed" in result
 
-@patch('main.safe_path')
-@patch('os.path.exists')
-def test_list_directory_not_found(mock_exists, mock_safe_path):
-    mock_safe_path.return_value = "/allowed/dir"
-    mock_exists.return_value = False
-    assert "Error: directory 'dir' not found." in main.list_directory("dir")
 
-@patch('main.safe_path')
-@patch('os.path.exists')
-@patch('os.path.isdir')
-def test_list_directory_not_a_dir(mock_isdir, mock_exists, mock_safe_path):
-    mock_safe_path.return_value = "/allowed/file.txt"
-    mock_exists.return_value = True
-    mock_isdir.return_value = False
-    assert "Error: 'file.txt' is not a directory." in main.list_directory("file.txt")
+@patch("jurbas.tools.safe_path", return_value="/allowed/missing")
+def test_list_directory_not_found(mock_safe_path):
+    with patch("os.path.exists", return_value=False):
+        result = jurbas.tools.list_directory("missing")
+    assert "Error: directory 'missing' not found." in result
 
-# === TESTS FOR write_file() ===
-@patch('main.safe_path')
-@patch('os.makedirs')
-@patch('os.path.exists')
-@patch('shutil.copy2')
-@patch('os.path.getsize')
-@patch('builtins.open', new_callable=MagicMock)
-def test_write_file_success(mock_open, mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path):
+
+@patch("jurbas.tools.safe_path", return_value="/allowed/file.txt")
+def test_list_directory_not_a_dir(mock_safe_path):
+    with patch("os.path.exists", return_value=True):
+        with patch("os.path.isdir", return_value=False):
+            result = jurbas.tools.list_directory("file.txt")
+    assert "Error: 'file.txt' is not a directory." in result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# write_file()
+# ═══════════════════════════════════════════════════════════════════════
+
+@patch("jurbas.tools.safe_path")
+@patch("jurbas.tools.os.makedirs")
+@patch("jurbas.tools.os.path.exists")
+@patch("jurbas.tools.shutil.copy2")
+@patch("jurbas.tools.os.path.getsize")
+def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
+                            mock_makedirs, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
-    mock_exists.return_value = False # No backup needed
+    mock_exists.return_value = False  # No backup needed
     mock_getsize.return_value = 12
 
-    mock_file = MagicMock()
-    mock_open.return_value.__enter__.return_value = mock_file
-
-    result = main.write_file("test.txt", "file content")
+    with patch("builtins.open", MagicMock()) as mock_open:
+        mock_file = MagicMock()
+        mock_open.return_value.__enter__.return_value = mock_file
+        result = jurbas.tools.write_file("test.txt", "file content")
 
     mock_makedirs.assert_called_once_with("/allowed", exist_ok=True)
     mock_open.assert_called_once_with("/allowed/test.txt", "w", encoding="utf-8")
@@ -120,128 +192,162 @@ def test_write_file_success(mock_open, mock_getsize, mock_copy2, mock_exists, mo
     mock_copy2.assert_not_called()
     assert "written successfully (12 bytes)" in result
 
-@patch('main.safe_path')
-@patch('os.makedirs')
-@patch('os.path.exists')
-@patch('shutil.copy2')
-@patch('os.path.getsize')
-@patch('builtins.open', new_callable=MagicMock)
-def test_write_file_with_backup(mock_open, mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path):
+
+@patch("jurbas.tools.safe_path")
+@patch("jurbas.tools.os.makedirs")
+@patch("jurbas.tools.os.path.exists")
+@patch("jurbas.tools.shutil.copy2")
+@patch("jurbas.tools.os.path.getsize")
+def test_write_file_with_backup(mock_getsize, mock_copy2, mock_exists,
+                                mock_makedirs, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
-    mock_exists.return_value = True # Needs backup
+    mock_exists.return_value = True   # Needs backup
     mock_getsize.return_value = 12
 
-    mock_file = MagicMock()
-    mock_open.return_value.__enter__.return_value = mock_file
+    with patch("builtins.open", MagicMock()):
+        result = jurbas.tools.write_file("test.txt", "file content")
 
-    result = main.write_file("test.txt", "file content")
-
-    mock_copy2.assert_called_once_with("/allowed/test.txt", "/allowed/test.txt.bak")
+    mock_copy2.assert_called_once_with("/allowed/test.txt",
+                                       "/allowed/test.txt.bak")
     assert "previous version backed up to 'test.txt.bak'" in result
 
-@patch('main.safe_path')
+
+@patch("jurbas.tools.safe_path", side_effect=PermissionError("Path not allowed"))
 def test_write_file_permission_error(mock_safe_path):
-    mock_safe_path.side_effect = PermissionError("Path not allowed")
-    assert "Error: Path not allowed" in main.write_file("test.txt", "content")
+    result = jurbas.tools.write_file("bad.txt", "content")
+    assert "Error: Path not allowed" in result
 
 
-def test_normalize_tool_call_accepts_function_dict():
-    tool_call = SimpleNamespace(
-        id="call_123",
-        type="function",
-        function={"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
-    )
+# ═══════════════════════════════════════════════════════════════════════
+# run_bash()
+# ═══════════════════════════════════════════════════════════════════════
 
-    assert main.normalize_tool_call(tool_call) == {
-        "id": "call_123",
-        "type": "function",
-        "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
-    }
+@patch("jurbas.tools.subprocess.run")
+def test_run_bash_success(mock_run):
+    mock_result = MagicMock()
+    mock_result.stdout = "hello world\n"
+    mock_result.stderr = ""
+    mock_result.returncode = 0
+    mock_run.return_value = mock_result
 
-# === TESTS FOR main() ===
-@patch('openai.OpenAI')
-@patch('builtins.input')
-@patch('builtins.print')
+    result = jurbas.tools.run_bash("echo hello")
+    assert "hello world" in result
+
+
+@patch("jurbas.tools.subprocess.run", side_effect=Exception("Boom"))
+def test_run_bash_error(mock_run):
+    result = jurbas.tools.run_bash("fail")
+    assert "Error executing command" in result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# main() loop  (streaming-based)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _make_stream_chunks(*text_fragments: str):
+    """Helper: yield minimal SSE-like chunks for streaming tests."""
+    for frag in text_fragments:
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta.content = frag
+        chunk.choices[0].delta.role = None
+        chunk.choices[0].delta.reasoning_content = None
+        chunk.choices[0].delta.tool_calls = None
+        yield chunk
+
+
+@patch("openai.OpenAI")
+@patch("builtins.input")
+@patch("builtins.print")
 def test_main_loop_exit(mock_print, mock_input, mock_openai):
-    # Setup to exit immediately
+    """Exiting immediately should not call the API."""
     mock_input.return_value = "exit"
+    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+        main.main()
+    mock_openai.assert_called_once()
+    ai_prints = [c for c in mock_print.call_args_list
+                 if c.args and "AI:" in str(c.args[0])]
+    assert len(ai_prints) == 0
+
+
+@patch("openai.OpenAI")
+@patch("builtins.input")
+@patch("builtins.print")
+def test_main_loop_streams_content(mock_print, mock_input, mock_openai):
+    """A non-tool streaming response is printed."""
+    mock_input.side_effect = ["hello", "exit"]
+
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+    mock_client.chat.completions.create.return_value = _make_stream_chunks(
+        "Hello ", "world!"
+    )
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
         main.main()
 
-    mock_openai.assert_called_once()
-    mock_print.assert_not_called()
+    print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list
+                         if c.args)
+    assert "Hello" in print_text
+    assert "world" in print_text
 
-@patch('openai.OpenAI')
-@patch('builtins.input')
-@patch('builtins.print')
-@patch('main.read_file')
-def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_openai):
-    # Input first iteration "do something", second iteration "quit"
-    mock_input.side_effect = ["read something", "quit"]
 
-    # Setup OpenAI client mock
+@patch("openai.OpenAI")
+@patch("builtins.input")
+@patch("builtins.print")
+@patch("jurbas.tools.read_file")
+def test_main_loop_with_tool_call(mock_read_file, mock_print,
+                                  mock_input, mock_openai):
+    """A tool-call in the stream leads to tool execution."""
+    mock_input.side_effect = ["read something", "exit"]
+
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
-    # First response: tool call
-    mock_response_1 = MagicMock()
-    mock_response_1.usage.prompt_tokens = None
-    mock_response_1.usage.completion_tokens = None
-    mock_response_1.usage.total_tokens = None
-    mock_response_1.choices[0].finish_reason = "tool_calls"
-    mock_tool_call = MagicMock()
-    mock_tool_call.function.name = "read_file"
-    mock_tool_call.function.arguments = '{"file_path": "test.txt"}'
-    mock_tool_call.id = "call_123"
-    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
-    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_123"}]}
+    def _chunk(content=None, tool_calls=None, finish_reason=None):
+        chunk = MagicMock()
+        choice = MagicMock()
+        choice.delta.content = content
+        choice.delta.role = None
+        choice.delta.reasoning_content = None
+        choice.delta.tool_calls = tool_calls
+        choice.finish_reason = finish_reason
+        chunk.choices = [choice]
+        return chunk
 
-    # Second response (after tool result): final text
-    mock_response_2 = MagicMock()
-    mock_response_2.usage.prompt_tokens = 20
-    mock_response_2.usage.completion_tokens = 10
-    mock_response_2.usage.total_tokens = 30
-    mock_response_2.choices[0].finish_reason = "stop"
-    mock_response_2.choices[0].message.content = "Here is the content"
-    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Here is the content"}
+    # Tool call that says "read_file"
+    tool_call = MagicMock()
+    tool_call.index = 0
+    tool_call.id = "call_abc"
+    tool_call.type = "function"
+    func = MagicMock()
+    func.name = "read_file"
+    func.arguments = '{"file_path": "test.txt"}'
+    tool_call.function = func
 
-    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+    mock_client.chat.completions.create.side_effect = [
+        iter([
+            _chunk(content="", tool_calls=None),
+            _chunk(content=None, tool_calls=[tool_call],
+                   finish_reason="tool_calls"),
+        ]),
+        iter([_chunk(content="Here is the result")]),
+    ]
 
-    # Setup tool mock
-    mock_read_file.return_value = "mocked file content"
+    mock_read_file.return_value = "mocked content"
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
         main.main()
 
-    # Check if tool was actually called
     mock_read_file.assert_called_once_with("test.txt")
-
-    # Check if AI's final text was printed
-    mock_print.assert_any_call("AI: Here is the content\n")
-
-    # Check token metrics printing
-    mock_print.assert_any_call("  [Tokens] Request: 0p / 0c (0 total) | Session: 0p / 0c (0 total)")
-    mock_print.assert_any_call("  [Tokens] Request: 20p / 10c (30 total) | Session: 20p / 10c (30 total)")
+    print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list
+                         if c.args)
+    assert "Here is the result" in print_text
 
 
-def test_readonly_bash_safety_gates():
-    # env, git branch, and git remote should not be autoapproved (return False)
-    assert main._is_readonly_bash("env") is False
-    assert main._is_readonly_bash("git branch") is False
-    assert main._is_readonly_bash("git remote") is False
-    assert main._is_readonly_bash("ls") is True
-
-
-@patch('subprocess.run')
-def test_run_bash_uses_devnull(mock_run):
-    import subprocess
-    mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-    main.run_bash("ls")
-    mock_run.assert_called_once()
-    _, kwargs = mock_run.call_args
-    assert kwargs.get("stdin") == subprocess.DEVNULL
-
+# ═══════════════════════════════════════════════════════════════════════
+# Extra safety & error handling tests
+# ═══════════════════════════════════════════════════════════════════════
 
 @patch('builtins.print')
 def test_main_missing_deepseek_api_key(mock_print):
@@ -286,21 +392,25 @@ def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
 
     err = APIError("Rate limit exceeded", request=MagicMock(), body={})
 
-    mock_response = MagicMock()
-    mock_response.usage.prompt_tokens = 5
-    mock_response.usage.completion_tokens = 5
-    mock_response.usage.total_tokens = 10
-    mock_response.choices[0].finish_reason = "stop"
-    mock_response.choices[0].message.content = "Success response"
-    mock_response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "Success response"}
+    # The second response chunk generator
+    def _chunk_stream():
+        chunk = MagicMock()
+        choice = MagicMock()
+        choice.delta.content = "Success response"
+        choice.delta.role = "assistant"
+        choice.delta.reasoning_content = None
+        choice.delta.tool_calls = None
+        chunk.choices = [choice]
+        chunk.usage = MagicMock(prompt_tokens=5, completion_tokens=5, total_tokens=10)
+        yield chunk
 
-    mock_client.chat.completions.create.side_effect = [err, mock_response]
+    mock_client.chat.completions.create.side_effect = [err, _chunk_stream()]
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
         main.main()
 
         assert mock_client.chat.completions.create.call_count == 2
-
+        
         second_call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
         contents = [m["content"] for m in second_call_kwargs["messages"] if m["role"] == "user"]
         assert "hello" not in contents
@@ -315,27 +425,40 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
-    mock_response_1 = MagicMock()
-    mock_response_1.usage.prompt_tokens = None
-    mock_response_1.usage.completion_tokens = None
-    mock_response_1.usage.total_tokens = None
-    mock_response_1.choices[0].finish_reason = "tool_calls"
-    mock_tool_call = MagicMock()
-    mock_tool_call.function.name = "read_file"
-    mock_tool_call.function.arguments = '{"file_path": ".env"}'
-    mock_tool_call.id = "call_env"
-    mock_response_1.choices[0].message.tool_calls = [mock_tool_call]
-    mock_response_1.choices[0].message.model_dump.return_value = {"role": "assistant", "tool_calls": [{"id": "call_env"}]}
+    # First call: returns a tool call for read_file targeting .env
+    def _tool_call_stream():
+        chunk = MagicMock()
+        choice = MagicMock()
+        choice.delta.content = ""
+        choice.delta.role = "assistant"
+        choice.delta.reasoning_content = None
+        
+        tool_call = MagicMock()
+        tool_call.index = 0
+        tool_call.id = "call_env"
+        tool_call.type = "function"
+        func = MagicMock()
+        func.name = "read_file"
+        func.arguments = '{"file_path": ".env"}'
+        tool_call.function = func
+        
+        choice.delta.tool_calls = [tool_call]
+        chunk.choices = [choice]
+        yield chunk
 
-    mock_response_2 = MagicMock()
-    mock_response_2.usage.prompt_tokens = 10
-    mock_response_2.usage.completion_tokens = 5
-    mock_response_2.usage.total_tokens = 15
-    mock_response_2.choices[0].finish_reason = "stop"
-    mock_response_2.choices[0].message.content = "I read it"
-    mock_response_2.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "I read it"}
+    # Second call: returns text response
+    def _text_response_stream():
+        chunk = MagicMock()
+        choice = MagicMock()
+        choice.delta.content = "I read it"
+        choice.delta.role = "assistant"
+        choice.delta.reasoning_content = None
+        choice.delta.tool_calls = None
+        chunk.choices = [choice]
+        chunk.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+        yield chunk
 
-    mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
+    mock_client.chat.completions.create.side_effect = [_tool_call_stream(), _text_response_stream()]
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
         main.main()

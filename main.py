@@ -1,302 +1,38 @@
+"""Jurbas-Code — terminal agent with SELF-MODIFICATION capability.
+
+Usage:
+    python main.py          # Run interactive REPL
+    python main.py --serve  # Same (kept for compatibility)
+"""
+
 import json
 import os
-import re
-import shutil
-import subprocess
 import sys
-import time
 import uuid
+import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# ─── Security configuration ───
-ALLOWED_BASE = os.path.realpath(os.path.dirname(__file__))
-MAX_TOOL_STEPS = 25
-BASH_TIMEOUT = 60*5
-
-DANGEROUS_PATTERNS = [
-    "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .",
-    "mkfs", "dd if=", "format", "fdisk",
-    ":(){ :|:& };:",
-    "chmod 000", "chown -R",
-    "> /dev/sda", "> /dev/sdb",
-    "wget ", "curl ",
-    "sudo ", "su ",
-]
-
-def safe_path(file_path: str) -> str:
-    """Resolves and validates a path within the allowed directory.
-
-    Uses realpath so that symlinks are resolved before the boundary check,
-    preventing a symlink inside the project from pointing outside it.
-    """
-    full = os.path.realpath(file_path)
-    if os.path.commonpath([ALLOWED_BASE, full]) != ALLOWED_BASE:
-        raise PermissionError(f"Path not allowed: {file_path}")
-    return full
-
-def _is_dangerous(command: str) -> str | None:
-    """Check if a command contains blacklisted patterns. Returns a reason or None."""
-    lower = command.lower().strip()
-    for pattern in DANGEROUS_PATTERNS:
-        if pattern in lower:
-            return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
-    if re.search(r'\|\s*(sudo\s+)?([^|\s]*/)?(sh|bash)\b', lower):
-        return "Piping to sudo/sh/bash is blocked for security."
-    return None
-
-READONLY_BASH = {
-    "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "tree",
-    "stat", "file", "which", "whoami", "date", "echo", "du", "df", "uname",
-}
-READONLY_GIT_SUBCMDS = {
-    "status", "log", "diff", "show",
-    "ls-files", "rev-parse", "blame", "describe",
-}
-SHELL_OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(", "&")
-MUTATING_FLAGS = {"-d", "-D", "--delete", "-f", "--force", "--prune", "--hard"}
-
-def _is_readonly_bash(command: str) -> bool:
-    """Best-effort check: True only for commands that clearly cannot mutate state.
-
-    Conservative by design — anything ambiguous (shell operators, mutating flags,
-    unknown commands) returns False so it gets gated behind a confirmation prompt
-    instead of running unattended.
-    """
-    if not isinstance(command, str):
-        return False
-    cmd = command.strip()
-    if not cmd or any(op in cmd for op in SHELL_OPERATORS) or "\n" in cmd or "\r" in cmd:
-        return False
-    tokens = cmd.split()
-    if any(t in MUTATING_FLAGS for t in tokens):
-        return False
-    head = tokens[0]
-    if head == "git":
-        sub = tokens[1] if len(tokens) > 1 else ""
-        return sub in READONLY_GIT_SUBCMDS
-    return head in READONLY_BASH
-
-def _requires_confirmation(name: str, args) -> bool:
-    """Decide whether a tool call needs explicit user approval before running."""
-    if not isinstance(args, dict):
-        return True
-    if name == "write_file":
-        return True
-    if name == "run_bash":
-        command = args.get("command", "")
-        return not _is_readonly_bash(command)
-    return False
-
-def confirm_action(name: str, args) -> bool:
-    """Prompt the user to approve a mutating action. Returns True if approved."""
-    args = args if isinstance(args, dict) else {}
-    print("\n  ⚠️  The agent wants to perform a mutating action:")
-    if name == "run_bash":
-        print(f"      $ {args.get('command', '')}")
-    elif name == "write_file":
-        content = args.get("content", "")
-        print(f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
-    else:
-        print(f"      {name}: {args}")
-    try:
-        answer = input("  Approve? [y/N] ").strip().lower()
-    except EOFError:
-        answer = ""
-    return answer in ("y", "yes")
-
-def read_file(file_path: str) -> str:
-    try:
-        full = safe_path(file_path)
-    except PermissionError as e:
-        return f"Error: {e}"
-    if not os.path.exists(full):
-        return f"Error: file '{file_path}' not found."
-    try:
-        with open(full, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        return f"Error reading file: {e}"
-
-def list_directory(dir_path: str) -> str:
-    try:
-        full = safe_path(dir_path)
-    except PermissionError as e:
-        return f"Error: {e}"
-    if not os.path.exists(full):
-        return f"Error: directory '{dir_path}' not found."
-    if not os.path.isdir(full):
-        return f"Error: '{dir_path}' is not a directory."
-    try:
-        items = []
-        for name in sorted(os.listdir(full)):
-            item_path = os.path.join(full, name)
-            kind = "DIR" if os.path.isdir(item_path) else "FILE"
-            size = ""
-            if kind == "FILE":
-                try:
-                    size_bytes = os.path.getsize(item_path)
-                    if size_bytes < 1024:
-                        size = f" ({size_bytes} B)"
-                    elif size_bytes < 1024 * 1024:
-                        size = f" ({size_bytes / 1024:.1f} KB)"
-                    else:
-                        size = f" ({size_bytes / 1024 / 1024:.1f} MB)"
-                except OSError:
-                    size = " (unknown size)"
-            items.append(f"  [{kind}] {name}{size}")
-        return f"Contents of '{dir_path}' ({len(items)} items):\n" + "\n".join(items)
-    except Exception as e:
-        return f"Error listing directory: {e}"
-
-def write_file(file_path: str, content: str) -> str:
-    try:
-        full = safe_path(file_path)
-    except PermissionError as e:
-        return f"Error: {e}"
-    try:
-        os.makedirs(os.path.dirname(full), exist_ok=True)
-        backup_note = ""
-        if os.path.exists(full):
-            backup = full + ".bak"
-            shutil.copy2(full, backup)
-            backup_note = f" (previous version backed up to '{os.path.basename(backup)}')"
-        with open(full, "w", encoding="utf-8") as f:
-            f.write(content)
-        size = os.path.getsize(full)
-        return f"File '{file_path}' written successfully ({size} bytes).{backup_note}"
-    except Exception as e:
-        return f"Error writing file: {e}"
-
-def run_bash(command: str) -> str:
-    """Execute a bash command inside the project directory and return its output.
-
-    Use this for git operations, running scripts, installing dependencies,
-    or any shell-level task. The command runs in './' (ALLOWED_BASE) as working
-    directory with a {BASH_TIMEOUT}s timeout.
-
-    Dangerous commands (rm -rf /, sudo, mkfs, etc.) are blocked for safety.
-    """
-    if not isinstance(command, str):
-        return "Error: command must be a string."
-    reason = _is_dangerous(command)
-    if reason:
-        return f"Error: {reason}"
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            cwd=ALLOWED_BASE,
-            timeout=BASH_TIMEOUT,
-            shell=True,
-            executable="/bin/bash",
-            stdin=subprocess.DEVNULL,
-        )
-        output_parts = []
-        if result.stdout.strip():
-            output_parts.append(result.stdout.rstrip("\n"))
-        if result.stderr.strip():
-            output_parts.append(f"[stderr]\n{result.stderr.rstrip()}")
-        if not output_parts:
-            if result.returncode == 0:
-                return "(command completed with no output)"
-            else:
-                return f"Error: command failed (exit code {result.returncode}) with no output."
-        output = "\n".join(output_parts)
-        if result.returncode != 0:
-            return f"Command exited with code {result.returncode}.\n{output}"
-        return output
-    except FileNotFoundError:
-        return "Error: shell (/bin/bash) not found."
-    except subprocess.TimeoutExpired:
-        return f"Error: command timed out after {BASH_TIMEOUT}s."
-    except PermissionError:
-        return "Error: permission denied while running command."
-    except Exception as e:
-        return f"Error executing command: {e}"
-
-TOOL_HANDLERS = {
-    "read_file": lambda args: read_file(args["file_path"]),
-    "list_directory": lambda args: list_directory(args["dir_path"]),
-    "write_file": lambda args: write_file(args["file_path"], args["content"]),
-    "run_bash": lambda args: run_bash(args["command"]),
-}
-
-SYSTEM_PROMPT = (
-    "You are a terminal agent with SELF-MODIFICATION capability. You can read, list, WRITE files, and execute BASH commands — including your own source code (main.py). Your purpose is to evolve your own capabilities: when the user asks for a new feature, read your current code, generate a modified version, and overwrite the corresponding file.\n\n"
-    "Rules:\n"
-    "- Always read main.py before modifying it to understand the current state.\n"
-    "- Think carefully before writing: the code must compile and run.\n"
-    "- Maintain the existing style and structure when adding tools.\n"
-    "- When finished with a modification, explain what was changed.\n"
-    "- Always respond in English.\n"
-    "- Use list_directory to explore the project structure.\n"
-    "- Use run_bash for any shell task: git, pip, python, ls, etc.\n"
-    "- Prefer run_bash for git operations (git status, git add, git commit, git log).\n"
-    "- Mutating actions (file writes, git commit/push, rm, installs) require user approval; if one is declined, adapt instead of retrying it."
+# Re-export all public symbols so that ``import main`` and
+# ``from main import safe_path`` continue to work (backwards compat).
+from jurbas import (           # noqa: F401
+    ALLOWED_BASE,
+    MAX_TOOL_STEPS,
+    safe_path,
+    is_secret_path,
+    load_dotenv,
+    _is_dangerous,
+    _is_readonly_bash,
+    _requires_confirmation,
+    confirm_action,
+    SYSTEM_PROMPT,
+    tools,
+    TOOL_HANDLERS,
+    read_file,
+    list_directory,
+    write_file,
+    run_bash,
 )
-
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Reads the content of a text file.",
-            "parameters": {
-                "type": "object",
-                "properties": {"file_path": {"type": "string", "description": "File path (e.g.: './main.py')."}},
-                "required": ["file_path"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_directory",
-            "description": "Lists files and folders in a directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {"dir_path": {"type": "string", "description": "Directory path (e.g.: './' for project root)."}},
-                "required": ["dir_path"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Writes content to a file. Creates parent directories if needed. Use to modify your own code.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {"type": "string", "description": "Path of the file to be written."},
-                    "content": {"type": "string", "description": "Complete content to be written to the file."}
-                },
-                "required": ["file_path", "content"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_bash",
-            "description": f"Execute a bash command inside the project directory. Timeout is {BASH_TIMEOUT}s. Dangerous commands are blocked.",
-            "parameters": {
-                "type": "object",
-                "properties": {"command": {"type": "string", "description": "The bash command to execute."}},
-                "required": ["command"],
-                "additionalProperties": False,
-            },
-        },
-    },
-]
+from jurbas.git_utils import extract_git_info, analyze_pr  # noqa: F401
 
 # ─── Claude Code Auth logic ───
 CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
@@ -399,7 +135,7 @@ def convert_messages_to_anthropic(messages):
                         "id": tc["id"],
                         "name": tc["function"]["name"],
                         "input": json.loads(tc["function"]["arguments"])
-                    })
+                      })
             if content:
                 anthropic_msgs.append({"role": "assistant", "content": content})
         elif m["role"] == "tool":
@@ -430,7 +166,17 @@ def normalize_tool_call(tool_call):
         },
     }
 
+# ─── Auto-extract on module load ───
+_extracted = False
+if os.path.exists(os.path.join(ALLOWED_BASE, ".git")):
+    try:
+        extract_git_info()
+        _extracted = True
+    except Exception as e:
+        print(f"⚠️ Auto-extract error: {e}")
+
 def main():
+    load_dotenv()
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
     
     if provider == "deepseek":
@@ -463,14 +209,15 @@ def main():
         for _step in range(MAX_TOOL_STEPS):
             if provider == "deepseek":
                 try:
-                    response = client.chat.completions.create(
+                    response_stream = client.chat.completions.create(
                         model="deepseek-v4-flash",
                         messages=messages,
-                        stream=False,
+                        stream=True,
                         reasoning_effort="high",
                         extra_body={"thinking": {"type": "enabled"}},
                         tools=tools,
                         tool_choice="auto",
+                        stream_options={"include_usage": True},
                     )
                 except AuthenticationError as e:
                     print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
@@ -483,8 +230,7 @@ def main():
                     break
                 except APIError as e:
                     print(f"AI: API Error: {e}")
-                    # Drop the failed turn (user prompt and any partial tool interactions)
-                    # from history to avoid stale context on retry.
+                    # Drop the failed turn
                     while messages and messages[-1].get("role") != "user":
                         messages.pop()
                     if messages and messages[-1].get("role") == "user":
@@ -493,47 +239,109 @@ def main():
                 except Exception as e:
                     print(f"AI: Unexpected Error: {e}")
                     break
-                
-                if not response.choices:
+
+                role = "assistant"
+                content = ""
+                content_seen = False
+                reasoning_content = ""
+                tool_calls = []
+                printed_ai_prefix = False
+
+                try:
+                    for chunk in response_stream:
+                        if not chunk.choices:
+                            usage = getattr(chunk, "usage", None)
+                            if usage:
+                                p_tokens = usage.prompt_tokens or 0
+                                c_tokens = usage.completion_tokens or 0
+                                t_tokens = usage.total_tokens or 0
+                                session_tokens["prompt"] += p_tokens
+                                session_tokens["completion"] += c_tokens
+                                session_tokens["total"] += t_tokens
+                                print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)")
+                            continue
+                        delta = chunk.choices[0].delta
+                        if getattr(delta, "role", None):
+                            role = delta.role
+                        reasoning = getattr(delta, "reasoning_content", None)
+                        if reasoning:
+                            if not printed_ai_prefix:
+                                print("AI: ", end="", flush=True)
+                                printed_ai_prefix = True
+                            reasoning_content += reasoning
+                            print(reasoning, end="", flush=True)
+
+                        if getattr(delta, "content", None) is not None:
+                            content_seen = True
+                            content += delta.content
+                            if delta.content:
+                                if not printed_ai_prefix:
+                                    print("AI: ", end="", flush=True)
+                                    printed_ai_prefix = True
+                                print(delta.content, end="", flush=True)
+
+                        tool_calls_chunk = getattr(delta, "tool_calls", None)
+                        if tool_calls_chunk:
+                            for tc_chunk in tool_calls_chunk:
+                                index = tc_chunk.index
+                                while len(tool_calls) <= index:
+                                    tool_calls.append({
+                                        "id": "",
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    })
+                                if tc_chunk.id:
+                                    tool_calls[index]["id"] += tc_chunk.id
+                                if getattr(tc_chunk, "type", None):
+                                    tool_calls[index]["type"] = tc_chunk.type
+                                if getattr(tc_chunk.function, "name", None):
+                                    tool_calls[index]["function"]["name"] += tc_chunk.function.name
+                                if getattr(tc_chunk.function, "arguments", None):
+                                    tool_calls[index]["function"]["arguments"] += tc_chunk.function.arguments
+                except Exception as e:
+                    print(f"\n[Stream interrupted: {e}]")
+                    break
+
+                if printed_ai_prefix:
+                    print()
+
+                if not content_seen and not content and not reasoning_content and not tool_calls:
                     print("AI: Error: No response choices returned from the API.\n")
                     break
 
-                usage = response.usage
-                if usage:
-                    p_tokens = usage.prompt_tokens or 0
-                    c_tokens = usage.completion_tokens or 0
-                    t_tokens = usage.total_tokens or 0
-                    session_tokens["prompt"] += p_tokens
-                    session_tokens["completion"] += c_tokens
-                    session_tokens["total"] += t_tokens
-                    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)")
+                assistant_msg_dict = {"role": role}
+                if content_seen or content or tool_calls:
+                    assistant_msg_dict["content"] = content
+                if reasoning_content:
+                    assistant_msg_dict["reasoning_content"] = reasoning_content
+                if tool_calls:
+                    assistant_msg_dict["tool_calls"] = [normalize_tool_call(tc) for tc in tool_calls]
+                    tool_calls = assistant_msg_dict["tool_calls"]
 
-                assistant_msg = response.choices[0].message
-                messages.append(assistant_msg.model_dump(exclude_none=True))
-                
-                finish = response.choices[0].finish_reason
-                if finish != "tool_calls":
-                    reply = (assistant_msg.content or "").strip()
-                    print(f"AI: {reply}\n")
+                messages.append(assistant_msg_dict)
+
+                if not tool_calls:
                     break
-                
-                tool_calls = [normalize_tool_call(tc) for tc in (assistant_msg.tool_calls or [])]
-                
+
             elif provider == "claude":
                 anthropic_messages = convert_messages_to_anthropic(messages)
                 system_prompt = next((m["content"] for m in messages if m["role"] == "system"), SYSTEM_PROMPT)
                 
-                response = client.messages.create(
-                    model="claude-3-7-sonnet-20250219",
-                    max_tokens=16000,
-                    system=[
-                        {"type": "text", "text": CLAUDE_CODE_IDENTITY},
-                        {"type": "text", "text": system_prompt},
-                    ],
-                    messages=anthropic_messages,
-                    tools=convert_to_anthropic_tools(tools),
-                )
-                
+                try:
+                    response = client.messages.create(
+                        model="claude-3-7-sonnet-20250219",
+                        max_tokens=16000,
+                        system=[
+                            {"type": "text", "text": CLAUDE_CODE_IDENTITY},
+                            {"type": "text", "text": system_prompt},
+                        ],
+                        messages=anthropic_messages,
+                        tools=convert_to_anthropic_tools(tools),
+                    )
+                except Exception as e:
+                    print(f"AI: Unexpected Error: {e}")
+                    break
+
                 usage = response.usage
                 if usage:
                     p_tokens = usage.input_tokens or 0
@@ -590,10 +398,6 @@ def main():
                 handler = TOOL_HANDLERS.get(name)
                 if handler is None:
                     result = f"Error: unknown tool '{name}'."
-                elif name == "read_file" and ".env" in args.get("file_path", ""):
-                    # Never read .env into the model context — it holds secrets
-                    # (API keys). Redact before touching the file at all.
-                    result = "<REDACTED: .env content is hidden from model for security>"
                 elif _requires_confirmation(name, args) and not confirm_action(name, args):
                     print("  ⛔ Declined.\n")
                     result = "Action declined by the user. Do not retry unless explicitly asked."
@@ -611,8 +415,16 @@ def main():
                     "name": name,
                     "content": result,
                 })
-        else:
-            print(f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
+            else:
+                print(f"AI: stopped after reaching the max of {MAX_TOOL_STEPS} tool steps.\n")
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--serve":
+        main()
+    else:
+        if not _extracted:
+            try:
+                analyze_pr()
+            except Exception as e:
+                print(f"⚠️  analyze_pr error: {e}")
+        main()

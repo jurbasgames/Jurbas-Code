@@ -90,9 +90,12 @@ def test_empty_choices(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
-    mock_response = MagicMock()
-    mock_response.choices = []
-    mock_client.chat.completions.create.return_value = mock_response
+    def _empty_stream():
+        chunk = MagicMock()
+        chunk.choices = []
+        yield chunk
+
+    mock_client.chat.completions.create.return_value = _empty_stream()
 
     main.main()
 
