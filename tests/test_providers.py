@@ -22,6 +22,19 @@ def test_get_claude_client_anthropic_api_key_guard():
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY esta setado"):
             providers.get_claude_client()
 
+
+def test_get_claude_client_uses_oauth_auth_token_not_api_key():
+    with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch("jurbas_code.providers.resolve_claude_token", return_value="oauth-token"):
+            with mock.patch("anthropic.Anthropic") as mock_anthropic:
+                providers.get_claude_client()
+
+    mock_anthropic.assert_called_once()
+    _, kwargs = mock_anthropic.call_args
+    assert kwargs["auth_token"] == "oauth-token"
+    assert "api_key" not in kwargs
+    assert kwargs["default_headers"]["x-app"] == "cli"
+
 def test_convert_to_anthropic_tools():
     openai_tools = [
         {
