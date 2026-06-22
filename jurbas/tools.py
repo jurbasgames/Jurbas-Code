@@ -21,6 +21,8 @@ from jurbas_code.tools import (
     TOOL_HANDLERS,
 )
 
+from jurbas.config import tools
+
 try:
     from duckduckgo_search import DDGS
     HAS_WEB_SEARCH = True
