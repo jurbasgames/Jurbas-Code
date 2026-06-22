@@ -62,6 +62,7 @@ uv sync --all-extras
 ## 🐍 Code style
 
 - Prefer the simplest correct implementation that satisfies the requested behavior.
+- **Ponytail** — https://github.com/DietrichGebert/ponytail
 - Python 3.13+
 - We use type hints whenever possible.
 - Function and variable names in `snake_case`.
