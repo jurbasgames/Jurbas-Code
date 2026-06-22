@@ -392,10 +392,10 @@ def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
 
     with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-123456789"}):
         with patch('sys.exit', side_effect=SystemExit) as mock_exit:
-            with pytest.raises(SystemExit):
-                main.main(args=[])
-            mock_exit.assert_called_once_with(1)
-            mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-1' is invalid or expired. Invalid API Key")
+                with pytest.raises(SystemExit):
+                    main.main(args=[])
+                mock_exit.assert_called_once_with(1)
+                mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-1' is invalid or expired. Invalid API Key")
 
 
 @patch('openai.OpenAI')
