@@ -1,11 +1,25 @@
 """Jurbas-Code — modular terminal agent package."""
 
 from importlib import metadata
+from pathlib import Path
+import tomllib
+
+
+def _read_version_from_pyproject() -> str:
+    """Read the source checkout version from pyproject.toml."""
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        version = pyproject["project"]["version"]
+    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError):
+        return "0.0.0"
+    return version if isinstance(version, str) and version else "0.0.0"
+
 
 try:
     __version__ = metadata.version("jurbas-code")
 except metadata.PackageNotFoundError:  # running from source / not installed
-    __version__ = "0.1.0"
+    __version__ = _read_version_from_pyproject()
 
 from .security import (
     ALLOWED_BASE,
