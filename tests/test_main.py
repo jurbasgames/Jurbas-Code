@@ -1,8 +1,10 @@
 """Tests for Jurbas-Code (modular architecture)."""
 
 import os
+from pathlib import Path
 import subprocess
 import sys
+import tomllib
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -516,6 +518,40 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
     call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
     tool_result = [m for m in call_kwargs["messages"] if m["role"] == "tool"][0]
     assert "<REDACTED: .env content is hidden from model for security>" in tool_result["content"]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Versioning (issue #9)
+# ═══════════════════════════════════════════════════════════════════════
+
+def test_version_attribute_is_nonempty_string():
+    import jurbas
+    assert isinstance(jurbas.__version__, str) and jurbas.__version__
+    assert main.__version__ == jurbas.__version__
+
+
+def test_source_checkout_version_fallback_reads_pyproject():
+    import jurbas
+
+    pyproject = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    assert jurbas._read_version_from_pyproject() == pyproject["project"]["version"]
+
+
+def test_main_version_flag_exits_zero_and_prints(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main.main(args=["--version"])
+    assert exc.value.code == 0
+    assert f"Jurbas-Code v{main.__version__}" in capsys.readouterr().out
+
+
+def test_main_version_short_flag(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main.main(args=["-v"])
+    assert exc.value.code == 0
+    assert f"Jurbas-Code v{main.__version__}" in capsys.readouterr().out
 
 
 # === TESTS FOR web_search() ===
