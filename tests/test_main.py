@@ -1,6 +1,7 @@
 """Tests for Jurbas-Code (modular architecture)."""
 
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -286,6 +287,37 @@ def test_main_loop_exit(mock_print, mock_input, mock_openai):
     ai_prints = [c for c in mock_print.call_args_list
                  if c.args and "AI:" in str(c.args[0])]
     assert len(ai_prints) == 0
+
+
+def test_cli_startup_does_not_run_git_analysis():
+    """Interactive startup must not run repository analysis or write git reports."""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    git_objects_path = os.path.join(repo_root, "_git_objects.txt")
+    git_analysis_path = os.path.join(repo_root, "_git_analysis.txt")
+    for path in (git_objects_path, git_analysis_path):
+        if os.path.exists(path):
+            os.remove(path)
+
+    env = os.environ.copy()
+    env.update({"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"})
+    result = subprocess.run(
+        [sys.executable, "main.py"],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        cwd=repo_root,
+        env=env,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    combined_output = result.stdout + result.stderr
+    assert "EXTRAÇÃO DE OBJETOS GIT" not in combined_output
+    assert "Auto-extract" not in combined_output
+    assert "analyze_pr" not in combined_output
+    assert not os.path.exists(git_objects_path)
+    assert not os.path.exists(git_analysis_path)
 
 
 @patch("openai.OpenAI")

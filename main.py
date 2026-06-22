@@ -54,18 +54,8 @@ from jurbas_code.providers import (
     normalize_tool_call,
 )
 
-from jurbas.git_utils import extract_git_info, analyze_pr  # noqa: F401
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 from jurbas_code.agent import Agent
-
-# ─── Auto-extract on module load ───
-_extracted = False
-if os.path.exists(os.path.join(ALLOWED_BASE, ".git")):
-    try:
-        extract_git_info()
-        _extracted = True
-    except Exception as e:
-        print(f"⚠️ Auto-extract error: {e}")
 
 HISTORY_FILE = "history.json"
 
@@ -170,9 +160,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
         main(sys.argv[2:])
     else:
-        if not _extracted:
-            try:
-                analyze_pr()
-            except Exception as e:
-                print(f"⚠️  analyze_pr error: {e}")
         main(sys.argv[1:])
