@@ -26,6 +26,7 @@ except ImportError:
 # Re-export all public symbols so that ``import main`` and
 # ``from main import safe_path`` continue to work (backwards compat).
 from jurbas import (           # noqa: F401
+    __version__,
     ALLOWED_BASE,
     MAX_TOOL_STEPS,
     safe_path,
@@ -108,6 +109,12 @@ def main(args=None):
         action="store_true",
         help="Clear the session history and exit."
     )
+    parser.add_argument(
+        "--version", "-v",
+        action="version",
+        version=f"Jurbas-Code v{__version__}",
+        help="Show the program version and exit."
+    )
     parsed_args = parser.parse_args([] if args is None else args)
 
     if parsed_args.clear_history:
@@ -135,6 +142,8 @@ def main(args=None):
 
     agent = Agent(client, provider)
     agent.messages = load_history()
+
+    print(f"Jurbas-Code v{__version__}")
 
     while True:
         try:

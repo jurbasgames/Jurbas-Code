@@ -518,6 +518,30 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
     assert "<REDACTED: .env content is hidden from model for security>" in tool_result["content"]
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Versioning (issue #9)
+# ═══════════════════════════════════════════════════════════════════════
+
+def test_version_attribute_is_nonempty_string():
+    import jurbas
+    assert isinstance(jurbas.__version__, str) and jurbas.__version__
+    assert main.__version__ == jurbas.__version__
+
+
+def test_main_version_flag_exits_zero_and_prints(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main.main(args=["--version"])
+    assert exc.value.code == 0
+    assert f"Jurbas-Code v{main.__version__}" in capsys.readouterr().out
+
+
+def test_main_version_short_flag(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main.main(args=["-v"])
+    assert exc.value.code == 0
+    assert f"Jurbas-Code v{main.__version__}" in capsys.readouterr().out
+
+
 # === TESTS FOR web_search() ===
 class TestWebSearch:
     """Tests for the web_search tool using DuckDuckGo."""
