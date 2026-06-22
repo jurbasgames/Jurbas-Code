@@ -24,6 +24,8 @@ from jurbas_code.providers import (
 
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
+
 def read_file(*args, **kwargs):
     return jurbas.tools.read_file(*args, **kwargs)
 
@@ -220,7 +222,7 @@ class Agent:
 
                 try:
                     response = self.client.messages.create(
-                        model="claude-3-7-sonnet-20250219",
+                        model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
                         max_tokens=16000,
                         system=[
                             {"type": "text", "text": CLAUDE_CODE_IDENTITY},
