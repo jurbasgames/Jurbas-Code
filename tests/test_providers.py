@@ -39,6 +39,20 @@ def test_convert_to_anthropic_tools():
     assert anthropic_tools[0]["description"] == "A test tool"
     assert "input_schema" in anthropic_tools[0]
 
+
+def test_convert_to_anthropic_tools_handles_missing_optional_fields():
+    anthropic_tools = providers.convert_to_anthropic_tools([
+        {"type": "function", "function": {"name": "minimal_tool"}}
+    ])
+
+    assert anthropic_tools == [
+        {
+            "name": "minimal_tool",
+            "description": "",
+            "input_schema": {"type": "object", "properties": {}},
+        }
+    ]
+
 def test_convert_messages_to_anthropic():
     messages = [
         {"role": "system", "content": "system prompt"},
@@ -54,6 +68,35 @@ def test_convert_messages_to_anthropic():
     assert anthropic_msgs[0]["role"] == "user"
     assert anthropic_msgs[1]["role"] == "assistant"
     assert anthropic_msgs[2]["role"] == "user" # tool result wrapped in user message
+
+
+def test_convert_messages_merges_tool_result_into_existing_user_message():
+    messages = [
+        {"role": "user", "content": "run tool"},
+        {"role": "tool", "tool_call_id": "call_1", "content": "tool output"},
+    ]
+
+    anthropic_msgs = providers.convert_messages_to_anthropic(messages)
+
+    assert [m["role"] for m in anthropic_msgs] == ["user"]
+    assert anthropic_msgs[0]["content"] == [
+        {"type": "text", "text": "run tool"},
+        {"type": "tool_result", "tool_use_id": "call_1", "content": "tool output"},
+    ]
+
+
+def test_convert_messages_accepts_dict_and_invalid_tool_arguments():
+    messages = [
+        {"role": "assistant", "content": "", "tool_calls": [
+            {"id": "dict_args", "function": {"name": "tool", "arguments": {"a": 1}}},
+            {"id": "bad_args", "function": {"name": "tool", "arguments": "{bad json"}},
+        ]},
+    ]
+
+    anthropic_msgs = providers.convert_messages_to_anthropic(messages)
+
+    assert anthropic_msgs[0]["content"][0]["input"] == {"a": 1}
+    assert anthropic_msgs[0]["content"][1]["input"] == {}
 
 def test_normalize_tool_call_accepts_function_dict():
     tool_call = SimpleNamespace(
