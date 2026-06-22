@@ -118,7 +118,7 @@ def main(args=None):
         action="store_true",
         help="Clear the session history and exit."
     )
-    parsed_args = parser.parse_args(args)
+    parsed_args = parser.parse_args([] if args is None else args)
 
     if parsed_args.clear_history:
         if os.path.exists(HISTORY_FILE):
@@ -168,11 +168,11 @@ def main(args=None):
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
-        main()
+        main(sys.argv[2:])
     else:
         if not _extracted:
             try:
                 analyze_pr()
             except Exception as e:
                 print(f"⚠️  analyze_pr error: {e}")
-        main()
+        main(sys.argv[1:])

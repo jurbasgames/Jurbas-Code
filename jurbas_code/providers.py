@@ -95,12 +95,25 @@ def get_client(provider_name: str) -> Any:
 def convert_to_anthropic_tools(openai_tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     anthropic_tools = []
     for t in openai_tools:
+        function = t.get("function", {})
         anthropic_tools.append({
-            "name": t["function"]["name"],
-            "description": t["function"]["description"],
-            "input_schema": t["function"]["parameters"]
+            "name": function.get("name"),
+            "description": function.get("description", ""),
+            "input_schema": function.get("parameters", {"type": "object", "properties": {}}),
         })
     return anthropic_tools
+
+
+def _parse_tool_arguments(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
 
 def convert_messages_to_anthropic(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     anthropic_msgs = []
@@ -115,11 +128,12 @@ def convert_messages_to_anthropic(messages: list[dict[str, Any]]) -> list[dict[s
                 content.append({"type": "text", "text": m["content"]})
             if m.get("tool_calls"):
                 for tc in m["tool_calls"]:
+                    function = tc.get("function", {})
                     content.append({
                         "type": "tool_use",
-                        "id": tc["id"],
-                        "name": tc["function"]["name"],
-                        "input": json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"]
+                        "id": tc.get("id"),
+                        "name": function.get("name"),
+                        "input": _parse_tool_arguments(function.get("arguments")),
                     })
             if content:
                 anthropic_msgs.append({"role": "assistant", "content": content})
@@ -127,10 +141,12 @@ def convert_messages_to_anthropic(messages: list[dict[str, Any]]) -> list[dict[s
             last_msg = anthropic_msgs[-1] if anthropic_msgs else None
             block = {
                 "type": "tool_result",
-                "tool_use_id": m["tool_call_id"],
-                "content": m["content"]
+                "tool_use_id": m.get("tool_call_id"),
+                "content": m.get("content"),
             }
-            if last_msg and last_msg["role"] == "user" and isinstance(last_msg["content"], list):
+            if last_msg and last_msg["role"] == "user":
+                if isinstance(last_msg["content"], str):
+                    last_msg["content"] = [{"type": "text", "text": last_msg["content"]}]
                 last_msg["content"].append(block)
             else:
                 anthropic_msgs.append({"role": "user", "content": [block]})
