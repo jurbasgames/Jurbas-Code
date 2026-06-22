@@ -10,12 +10,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from jurbas_code.prompts import SYSTEM_PROMPT
+from jurbas_code.tool_schemas import BASH_TIMEOUT, tools
+
 load_dotenv()
 
 # ─── Security configuration ───
 ALLOWED_BASE = os.path.realpath("./")
 MAX_TOOL_STEPS = 25
-BASH_TIMEOUT = 60*5
 
 DANGEROUS_PATTERNS = [
     "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .",
@@ -226,77 +228,6 @@ TOOL_HANDLERS = {
     "run_bash": lambda args: run_bash(args["command"]),
 }
 
-SYSTEM_PROMPT = (
-    "You are a terminal agent with SELF-MODIFICATION capability. You can read, list, WRITE files, and execute BASH commands — including your own source code (main.py). Your purpose is to evolve your own capabilities: when the user asks for a new feature, read your current code, generate a modified version, and overwrite the corresponding file.\n\n"
-    "Rules:\n"
-    "- Always read main.py before modifying it to understand the current state.\n"
-    "- Think carefully before writing: the code must compile and run.\n"
-    "- Maintain the existing style and structure when adding tools.\n"
-    "- When finished with a modification, explain what was changed.\n"
-    "- Always respond in English.\n"
-    "- Use list_directory to explore the project structure.\n"
-    "- Use run_bash for any shell task: git, pip, python, ls, etc.\n"
-    "- Prefer run_bash for git operations (git status, git add, git commit, git log).\n"
-    "- Mutating actions (file writes, git commit/push, rm, installs) require user approval; if one is declined, adapt instead of retrying it."
-)
-
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Reads the content of a text file.",
-            "parameters": {
-                "type": "object",
-                "properties": {"file_path": {"type": "string", "description": "File path (e.g.: './main.py')."}},
-                "required": ["file_path"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_directory",
-            "description": "Lists files and folders in a directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {"dir_path": {"type": "string", "description": "Directory path (e.g.: './' for project root)."}},
-                "required": ["dir_path"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Writes content to a file. Creates parent directories if needed. Use to modify your own code.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {"type": "string", "description": "Path of the file to be written."},
-                    "content": {"type": "string", "description": "Complete content to be written to the file."}
-                },
-                "required": ["file_path", "content"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_bash",
-            "description": f"Execute a bash command inside the project directory. Timeout is {BASH_TIMEOUT}s. Dangerous commands are blocked.",
-            "parameters": {
-                "type": "object",
-                "properties": {"command": {"type": "string", "description": "The bash command to execute."}},
-                "required": ["command"],
-                "additionalProperties": False,
-            },
-        },
-    },
-]
 
 # ─── Claude Code Auth logic ───
 CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
