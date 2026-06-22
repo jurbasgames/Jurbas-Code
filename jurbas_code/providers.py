@@ -76,7 +76,7 @@ def get_claude_client() -> Any:
     token = resolve_claude_token()
     if not token:
         raise RuntimeError("Nao encontrei credenciais do Claude Code.")
-    return anthropic.Anthropic(api_key=token, default_headers=claude_code_headers())
+    return anthropic.Anthropic(auth_token=token, default_headers=claude_code_headers())
 
 def get_client(provider_name: str) -> Any:
     provider = provider_name.lower()
