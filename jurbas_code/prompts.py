@@ -9,5 +9,6 @@ SYSTEM_PROMPT = (
     "- Use list_directory to explore the project structure.\n"
     "- Use run_bash for any shell task: git, pip, python, ls, etc.\n"
     "- Prefer run_bash for git operations (git status, git add, git commit, git log).\n"
-    "- Mutating actions (file writes, git commit/push, rm, installs) require user approval; if one is declined, adapt instead of retrying it."
+    "- Mutating actions (file writes, git commit/push, rm, installs) require user approval; if one is declined, adapt instead of retrying it.\n\n"
+    "Operating loop: before acting, understand the task by reading relevant files; state a brief plan; make the minimal correct change; verify it compiles and behaves as expected; if uncertain, say so explicitly rather than guessing."
 )
