@@ -1,6 +1,7 @@
 # Jurbas-Code
 
 [![Contribute](https://img.shields.io/badge/contribute-CONTRIBUTING.md-blue)](CONTRIBUTING.md)
+[![Agent Instructions](https://img.shields.io/badge/agents-AGENTS.md-purple)](AGENTS.md)
 
 An AI terminal agent with streaming support and multiple LLM providers. It is designed to evolve toward a self-evolving, self-benchmarking agent with data-driven self-analysis and human feedback — not just perception-based. Inspired by Hermes from Nous Research.
 
@@ -19,9 +20,11 @@ uv sync --all-extras
 # Configure DeepSeek if you want the DeepSeek provider
 echo "DEEPSEEK_API_KEY=your-key-here" > .env
 
-# Run with the default provider (claude)
-uv run main.py "Hello"
+# Run the interactive REPL with the default provider (claude)
+uv run main.py
 ```
+
+At the `You:` prompt, type a request. Use `exit` or `quit` to leave the REPL.
 
 ## Providers
 
@@ -33,11 +36,9 @@ Available providers:
 Select the provider with `LLM_PROVIDER`:
 
 ```bash
-LLM_PROVIDER=claude   uv run main.py "Your prompt here"
-LLM_PROVIDER=deepseek uv run main.py "Your prompt here"
+LLM_PROVIDER=claude   uv run main.py
+LLM_PROVIDER=deepseek uv run main.py
 ```
-
-If no prompt argument is provided, the default prompt is `Hello`.
 
 ## Provider `claude` — Claude Code subscription
 
@@ -78,26 +79,27 @@ The Claude provider refuses to run if `ANTHROPIC_API_KEY` is set, because this p
 
 ```bash
 export DEEPSEEK_API_KEY=<your-key>
-LLM_PROVIDER=deepseek uv run main.py "Hello"
+LLM_PROVIDER=deepseek uv run main.py
 ```
 
 ## 🧪 Tests
 
 ```bash
-uv run pytest
+uv run --extra dev pytest -q
 ```
 
 Useful focused checks:
 
 ```bash
-uv run python -m py_compile main.py tests/test_claude_code_headers.py
-uv run python -m unittest -v tests/test_claude_code_headers.py
-uv run --with pytest pytest -q
+uv run --extra dev python -m py_compile main.py jurbas/*.py jurbas_code/*.py tests/*.py
+uv run --extra dev pytest -q tests/test_claude_code_headers.py
 ```
 
 ## 🤝 How to Contribute
 
 Check the full guide in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+Autonomous coding agents and review bots must also read [`AGENTS.md`](AGENTS.md) before changing code. The short version: small PRs, current `main`, real validation, no startup side effects, no speculative refactors.
 
 ---
 

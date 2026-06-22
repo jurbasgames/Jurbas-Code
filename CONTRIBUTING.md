@@ -37,12 +37,14 @@ Based on [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#s
 5. If there are suggestions, make the adjustments and request a new review.
 6. After approval, merge using **squash**.
 
+Autonomous coding agents and review bots must also follow [`AGENTS.md`](AGENTS.md).
+
 ## 🧪 Tests
 
 - Tests live in `tests/`.
 - To run them:
   ```bash
-  uv run pytest
+  uv run --extra dev pytest -q
   ```
 - Make sure all tests pass before opening a PR.
 - New tests are welcome and encouraged!
@@ -59,7 +61,7 @@ uv sync --all-extras
 
 ## 🐍 Code style
 
-- **Ponytail** — https://github.com/DietrichGebert/ponytail
+- Prefer the simplest correct implementation that satisfies the requested behavior.
 - Python 3.13+
 - We use type hints whenever possible.
 - Function and variable names in `snake_case`.
