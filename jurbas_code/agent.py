@@ -12,7 +12,6 @@ from jurbas import (
     SYSTEM_PROMPT,
     tools as TOOLS_SCHEMA,
 )
-import jurbas
 import jurbas.tools
 
 from jurbas_code.providers import (
@@ -36,11 +35,15 @@ def write_file(*args, **kwargs):
 def run_bash(*args, **kwargs):
     return jurbas.tools.run_bash(*args, **kwargs)
 
+def web_search(*args, **kwargs):
+    return jurbas.tools.web_search(*args, **kwargs)
+
 TOOL_HANDLERS = {
     "read_file": lambda args: read_file(args["file_path"]),
     "list_directory": lambda args: list_directory(args["dir_path"]),
     "write_file": lambda args: write_file(args["file_path"], args["content"]),
     "run_bash": lambda args: run_bash(args["command"]),
+    "web_search": lambda args: web_search(args["query"], args.get("max_results", 5)),
 }
 
 class Agent:

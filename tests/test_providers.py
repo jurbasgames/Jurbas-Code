@@ -1,5 +1,6 @@
 import os
 import pytest
+from types import SimpleNamespace
 from unittest import mock
 from jurbas_code import providers
 
@@ -53,3 +54,16 @@ def test_convert_messages_to_anthropic():
     assert anthropic_msgs[0]["role"] == "user"
     assert anthropic_msgs[1]["role"] == "assistant"
     assert anthropic_msgs[2]["role"] == "user" # tool result wrapped in user message
+
+def test_normalize_tool_call_accepts_function_dict():
+    tool_call = SimpleNamespace(
+        id="call_123",
+        type="function",
+        function={"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    )
+
+    assert providers.normalize_tool_call(tool_call) == {
+        "id": "call_123",
+        "type": "function",
+        "function": {"name": "read_file", "arguments": '{"file_path": "test.txt"}'},
+    }

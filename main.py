@@ -123,6 +123,7 @@ def main(args=None):
         return
 
     load_dotenv()
+    
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
     
     if provider == "deepseek":
