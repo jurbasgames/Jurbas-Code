@@ -21,7 +21,7 @@ from jurbas_code.tools import (
     TOOL_HANDLERS,
 )
 
-from jurbas.config import tools
+from jurbas.config import tools_schema as tools
 
 try:
     from duckduckgo_search import DDGS

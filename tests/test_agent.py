@@ -152,3 +152,74 @@ def test_agent_invalid_tool_arguments(mock_client):
     # Verify tool result message contains error
     tool_msg = next(m for m in agent.messages if m["role"] == "tool")
     assert "Error: invalid JSON arguments" in tool_msg["content"]
+
+
+def test_agent_claude_authentication_error(mock_client, capsys):
+    agent = Agent(mock_client, provider="claude")
+    import anthropic
+    import httpx
+    mock_response = httpx.Response(401, request=httpx.Request("POST", "https://api.anthropic.com"))
+    mock_client.messages.create.side_effect = anthropic.AuthenticationError(
+        message="Auth error",
+        response=mock_response,
+        body=None
+    )
+    with pytest.raises(SystemExit):
+        agent.chat("Hi")
+    captured = capsys.readouterr()
+    assert "AI: Authentication Error:" in captured.out
+
+
+def test_agent_claude_rate_limit_error(mock_client, capsys):
+    agent = Agent(mock_client, provider="claude")
+    import anthropic
+    import httpx
+    mock_response = httpx.Response(429, request=httpx.Request("POST", "https://api.anthropic.com"))
+    mock_client.messages.create.side_effect = anthropic.RateLimitError(
+        message="Rate limit",
+        response=mock_response,
+        body=None
+    )
+    agent.chat("Hi")
+    captured = capsys.readouterr()
+    assert "AI: Rate Limit Error:" in captured.out
+
+
+def test_agent_claude_timeout_error(mock_client, capsys):
+    agent = Agent(mock_client, provider="claude")
+    import anthropic
+    import httpx
+    mock_request = httpx.Request("POST", "https://api.anthropic.com")
+    mock_client.messages.create.side_effect = anthropic.APITimeoutError(
+        request=mock_request
+    )
+    agent.chat("Hi")
+    captured = capsys.readouterr()
+    assert "AI: Timeout Error:" in captured.out
+
+
+def test_agent_claude_api_error(mock_client, capsys):
+    agent = Agent(mock_client, provider="claude")
+    agent.messages = [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello"}, {"role": "user", "content": "How are you?"}]
+    import anthropic
+    import httpx
+    mock_request = httpx.Request("POST", "https://api.anthropic.com")
+    mock_client.messages.create.side_effect = anthropic.APIError(
+        message="API error",
+        request=mock_request,
+        body=None
+    )
+    agent.chat("How are you?")
+    captured = capsys.readouterr()
+    assert "AI: API Error:" in captured.out
+    assert len(agent.messages) == 3
+    assert agent.messages[-1] == {"role": "user", "content": "How are you?"}
+
+
+def test_agent_claude_unexpected_error(mock_client, capsys):
+    agent = Agent(mock_client, provider="claude")
+    mock_client.messages.create.side_effect = Exception("Unexpected")
+    agent.chat("Hi")
+    captured = capsys.readouterr()
+    assert "AI: Unexpected Error:" in captured.out
+

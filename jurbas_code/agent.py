@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import anthropic
 
 from jurbas import (
     ALLOWED_BASE,
@@ -10,7 +11,7 @@ from jurbas import (
     _is_readonly_bash,
     _requires_confirmation,
     SYSTEM_PROMPT,
-    tools as TOOLS_SCHEMA,
+    tools_schema as TOOLS_SCHEMA,
 )
 import jurbas.tools
 
@@ -217,16 +218,36 @@ class Agent:
                 anthropic_messages = convert_messages_to_anthropic(self.messages)
                 system_prompt_text = next((m["content"] for m in self.messages if m["role"] == "system"), SYSTEM_PROMPT)
 
-                response = self.client.messages.create(
-                    model="claude-3-7-sonnet-20250219",
-                    max_tokens=16000,
-                    system=[
-                        {"type": "text", "text": CLAUDE_CODE_IDENTITY},
-                        {"type": "text", "text": system_prompt_text},
-                    ],
-                    messages=anthropic_messages,
-                    tools=convert_to_anthropic_tools(self.tools),
-                )
+                try:
+                    response = self.client.messages.create(
+                        model="claude-3-7-sonnet-20250219",
+                        max_tokens=16000,
+                        system=[
+                            {"type": "text", "text": CLAUDE_CODE_IDENTITY},
+                            {"type": "text", "text": system_prompt_text},
+                        ],
+                        messages=anthropic_messages,
+                        tools=convert_to_anthropic_tools(self.tools),
+                    )
+                except anthropic.AuthenticationError as e:
+                    print(f"AI: Authentication Error: {e}")
+                    sys.exit(1)
+                except anthropic.RateLimitError as e:
+                    print(f"AI: Rate Limit Error: {e}\n")
+                    break
+                except anthropic.APITimeoutError as e:
+                    print(f"AI: Timeout Error: {e}\n")
+                    break
+                except anthropic.APIError as e:
+                    print(f"AI: API Error: {e}")
+                    while self.messages and self.messages[-1].get("role") != "user":
+                        self.messages.pop()
+                    if self.messages and self.messages[-1].get("role") == "user":
+                        self.messages.pop()
+                    break
+                except Exception as e:
+                    print(f"AI: Unexpected Error: {e}")
+                    break
 
                 usage = response.usage
                 if usage:

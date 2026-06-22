@@ -10,6 +10,12 @@ import json
 import os
 import sys
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except AttributeError:
+        pass
+
 try:
     from duckduckgo_search import DDGS
     HAS_WEB_SEARCH = True
@@ -30,7 +36,7 @@ from jurbas import (           # noqa: F401
     _requires_confirmation,
     confirm_action,
     SYSTEM_PROMPT,
-    tools,
+    tools_schema as tools,
     TOOL_HANDLERS,
     read_file,
     list_directory,

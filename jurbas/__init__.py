@@ -11,7 +11,7 @@ from .security import (
     _requires_confirmation,
     confirm_action,
 )
-from .config import SYSTEM_PROMPT, tools
+from .config import SYSTEM_PROMPT, tools_schema
 from .tools import TOOL_HANDLERS, read_file, list_directory, write_file, run_bash, web_search, HAS_WEB_SEARCH
 
 __all__ = [
@@ -25,7 +25,7 @@ __all__ = [
     "_requires_confirmation",
     "confirm_action",
     "SYSTEM_PROMPT",
-    "tools",
+    "tools_schema",
     "TOOL_HANDLERS",
     "read_file",
     "list_directory",

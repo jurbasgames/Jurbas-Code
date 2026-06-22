@@ -2,7 +2,14 @@
 
 import os
 import subprocess
+import sys
 import zlib
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except AttributeError:
+        pass
 
 from .security import ALLOWED_BASE
 

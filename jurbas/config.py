@@ -16,7 +16,7 @@ SYSTEM_PROMPT = (
 )
 
 # ─── Tool definitions (OpenAI schema) ───
-tools = [
+tools_schema = [
     {
         "type": "function",
         "function": {
