@@ -10,10 +10,9 @@ from .adapters import (
     normalize_tool_call,
 )
 from .providers import get_claude_client, CLAUDE_CODE_IDENTITY
+from .providers import resolve_provider_model
 
 from jurbas_code.agent import Agent
-
-DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 
 def run_agent_loop():
     import main
@@ -34,6 +33,7 @@ def run_agent_loop():
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     session_tokens = {"prompt": 0, "completion": 0, "total": 0}
+    model = resolve_provider_model(provider, client)
 
     while True:
         try:
@@ -51,7 +51,7 @@ def run_agent_loop():
         for _step in range(MAX_TOOL_STEPS):
             if provider == "deepseek":
                 response = client.chat.completions.create(
-                    model="deepseek-v4-flash",
+                    model=model,
                     messages=messages,
                     stream=False,
                     reasoning_effort="high",
@@ -90,7 +90,7 @@ def run_agent_loop():
                 system_prompt = next((m["content"] for m in messages if m["role"] == "system"), SYSTEM_PROMPT)
 
                 response = client.messages.create(
-                    model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
+                    model=model,
                     max_tokens=16000,
                     system=[
                         {"type": "text", "text": CLAUDE_CODE_IDENTITY},
