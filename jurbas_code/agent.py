@@ -20,11 +20,10 @@ from jurbas_code.providers import (
     convert_messages_to_anthropic,
     convert_to_anthropic_tools,
     normalize_tool_call,
+    resolve_provider_model,
 )
 
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
-
-DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 
 def read_file(*args, **kwargs):
     return jurbas.tools.read_file(*args, **kwargs)
@@ -60,12 +59,13 @@ class Agent:
 
     def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
         self.messages.append({"role": "user", "content": user_input})
+        model = resolve_provider_model(self.provider, self.client)
 
         for _step in range(self.max_tool_steps):
             if self.provider == "deepseek":
                 try:
                     response = self.client.chat.completions.create(
-                        model="deepseek-v4-flash",
+                        model=model,
                         messages=self.messages,
                         stream=True,
                         reasoning_effort="high",
@@ -222,7 +222,7 @@ class Agent:
 
                 try:
                     response = self.client.messages.create(
-                        model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
+                        model=model,
                         max_tokens=16000,
                         system=[
                             {"type": "text", "text": CLAUDE_CODE_IDENTITY},
