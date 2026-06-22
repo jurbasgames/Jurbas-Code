@@ -170,6 +170,42 @@ def test_agent_claude_authentication_error(mock_client, capsys):
     assert "AI: Authentication Error:" in captured.out
 
 
+def test_agent_claude_uses_current_default_model(mock_client):
+    agent = Agent(mock_client, provider="claude")
+    text_block = MagicMock(type="text", text="pong")
+    mock_response = MagicMock()
+    mock_response.usage.input_tokens = 1
+    mock_response.usage.output_tokens = 1
+    mock_response.content = [text_block]
+    mock_client.messages.create.return_value = mock_response
+
+    on_ai_reply = MagicMock()
+    with patch.dict(os.environ, {}, clear=True):
+        agent.chat("ping", on_ai_reply=on_ai_reply)
+
+    kwargs = mock_client.messages.create.call_args.kwargs
+    legacy_model = "claude-3-7" "-sonnet-20250219"
+    assert kwargs["model"] == "claude-sonnet-4-6"
+    assert kwargs["model"] != legacy_model
+    on_ai_reply.assert_called_once_with("pong")
+
+
+def test_agent_claude_model_can_be_overridden_with_env(mock_client):
+    agent = Agent(mock_client, provider="claude")
+    text_block = MagicMock(type="text", text="pong")
+    mock_response = MagicMock()
+    mock_response.usage.input_tokens = 1
+    mock_response.usage.output_tokens = 1
+    mock_response.content = [text_block]
+    mock_client.messages.create.return_value = mock_response
+
+    with patch.dict(os.environ, {"CLAUDE_MODEL": "claude-test-model"}, clear=True):
+        agent.chat("ping")
+
+    kwargs = mock_client.messages.create.call_args.kwargs
+    assert kwargs["model"] == "claude-test-model"
+
+
 def test_agent_claude_rate_limit_error(mock_client, capsys):
     agent = Agent(mock_client, provider="claude")
     import anthropic

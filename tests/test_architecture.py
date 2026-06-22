@@ -1,4 +1,6 @@
 import importlib
+from pathlib import Path
+
 import pytest
 from jurbas import security, tools, prompts, adapters, providers, agent
 
@@ -40,3 +42,17 @@ def test_provider_no_immediate_network():
     # This is partially covered by test_modules_importable, but we can be explicit
     import jurbas.providers as providers
     assert hasattr(providers, 'get_claude_client')
+
+
+def test_no_legacy_claude_3_7_model_hardcode():
+    """The Claude 3.7 model id is rejected by the current Claude Code API path."""
+    repo_root = Path(__file__).resolve().parents[1]
+    offenders = []
+    legacy_model = "claude-3-7" "-sonnet-20250219"
+    for path in repo_root.rglob("*.py"):
+        if any(part in {".git", ".venv", "__pycache__"} for part in path.parts):
+            continue
+        if legacy_model in path.read_text(encoding="utf-8"):
+            offenders.append(str(path.relative_to(repo_root)))
+
+    assert offenders == []

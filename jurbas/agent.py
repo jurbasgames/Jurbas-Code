@@ -13,6 +13,8 @@ from .providers import get_claude_client, CLAUDE_CODE_IDENTITY
 
 from jurbas_code.agent import Agent
 
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
+
 def run_agent_loop():
     import main
     main.main()
@@ -88,7 +90,7 @@ def run_agent_loop():
                 system_prompt = next((m["content"] for m in messages if m["role"] == "system"), SYSTEM_PROMPT)
 
                 response = client.messages.create(
-                    model="claude-3-7-sonnet-20250219",
+                    model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
                     max_tokens=16000,
                     system=[
                         {"type": "text", "text": CLAUDE_CODE_IDENTITY},
