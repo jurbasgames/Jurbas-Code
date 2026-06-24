@@ -10,6 +10,8 @@ from typing import Any
 CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
 CLAUDE_CODE_USER_AGENT = "claude-cli/2.1.183 (external, cli)"
 ANTHROPIC_VERSION = "2023-06-01"
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
 CLAUDE_CODE_BETA_FLAGS = (
     "oauth-2025-04-20",
     "interleaved-thinking-2025-05-14",
@@ -90,6 +92,51 @@ def get_client(provider_name: str) -> Any:
         return get_claude_client()
     else:
         raise ValueError(f"Provider desconhecido: {provider}. Use 'claude' ou 'deepseek'.")
+
+def _listed_model_ids(client: Any) -> list[str]:
+    models = getattr(client, "models", None)
+    list_models = getattr(models, "list", None)
+    if not callable(list_models):
+        return []
+    response = list_models()
+    items = getattr(response, "data", response)
+    model_ids = []
+    for item in items:
+        model_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        if isinstance(model_id, str) and model_id:
+            model_ids.append(model_id)
+    return model_ids
+
+def _env_model(provider: str) -> str | None:
+    env_var = {
+        "claude": "CLAUDE_MODEL",
+        "deepseek": "DEEPSEEK_MODEL",
+    }.get(provider)
+    if env_var:
+        model = os.environ.get(env_var, "").strip()
+        if model:
+            return model
+    model = os.environ.get("LLM_MODEL", "").strip()
+    return model or None
+
+def resolve_provider_model(provider_name: str, client: Any) -> str:
+    provider = provider_name.lower()
+    env_model = _env_model(provider)
+    if env_model:
+        return env_model
+
+    defaults = {
+        "claude": DEFAULT_CLAUDE_MODEL,
+        "deepseek": DEFAULT_DEEPSEEK_MODEL,
+    }
+    default_model = defaults[provider]
+    try:
+        model_ids = _listed_model_ids(client)
+    except Exception:
+        return default_model
+    if default_model in model_ids:
+        return default_model
+    return model_ids[0] if model_ids else default_model
 
 # ─── Converters ───
 def convert_to_anthropic_tools(openai_tools: list[dict[str, Any]]) -> list[dict[str, Any]]:

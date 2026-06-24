@@ -17,3 +17,10 @@ def test_system_prompt_mentions_extracted_package_files():
     assert "main.py" in SYSTEM_PROMPT
     assert "jurbas_code/prompts.py" in SYSTEM_PROMPT
     assert "jurbas_code/tool_schemas.py" in SYSTEM_PROMPT
+
+def test_system_prompt_contains_reasoning_loop():
+    prompt_lower = SYSTEM_PROMPT.lower()
+    assert "understand" in prompt_lower
+    assert "plan" in prompt_lower
+    assert "verify" in prompt_lower
+    assert "uncertain" in prompt_lower
