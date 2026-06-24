@@ -29,10 +29,10 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --locked --python 3.13
 
       - name: Compile-check all Python files
-        run: python -m py_compile main.py jurbas/*.py jurbas_code/*.py tests/*.py
+        run: uv run --extra dev --locked --python 3.13 python -m py_compile main.py jurbas/*.py jurbas_code/*.py tests/*.py
 
       - name: Run tests
-        run: uv run --extra dev pytest -q -v
+        run: uv run --extra dev --locked --python 3.13 pytest -q -v
