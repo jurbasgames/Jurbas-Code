@@ -33,6 +33,12 @@ def test_tool_names_match_handlers():
         f"Handlers: {handler_names}"
     )
 
+
+def test_agent_uses_canonical_tool_dispatcher():
+    """Agent dispatch must use the canonical handler map from jurbas_code.tools."""
+    assert agent.TOOL_HANDLERS is tools.TOOL_HANDLERS
+
+
 def test_main_as_entrypoint():
     """Verify main.py remains importable and has a main function."""
     import main

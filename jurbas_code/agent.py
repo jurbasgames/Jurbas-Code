@@ -13,7 +13,7 @@ from jurbas_code.security import (
 )
 from jurbas_code.prompts import SYSTEM_PROMPT
 from jurbas_code.tool_schemas import tools as TOOLS_SCHEMA
-import jurbas_code.tools
+from jurbas_code.tools import TOOL_HANDLERS
 
 from jurbas_code.providers import (
     CLAUDE_CODE_IDENTITY,
@@ -24,29 +24,6 @@ from jurbas_code.providers import (
 )
 
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
-
-def read_file(*args, **kwargs):
-    return jurbas_code.tools.read_file(*args, **kwargs)
-
-def list_directory(*args, **kwargs):
-    return jurbas_code.tools.list_directory(*args, **kwargs)
-
-def write_file(*args, **kwargs):
-    return jurbas_code.tools.write_file(*args, **kwargs)
-
-def run_bash(*args, **kwargs):
-    return jurbas_code.tools.run_bash(*args, **kwargs)
-
-def web_search(*args, **kwargs):
-    return jurbas_code.tools.web_search(*args, **kwargs)
-
-TOOL_HANDLERS = {
-    "read_file": lambda args: read_file(args["file_path"]),
-    "list_directory": lambda args: list_directory(args["dir_path"]),
-    "write_file": lambda args: write_file(args["file_path"], args["content"]),
-    "run_bash": lambda args: run_bash(args["command"]),
-    "web_search": lambda args: web_search(args["query"], args.get("max_results", 5)),
-}
 
 class Agent:
     def __init__(self, client, provider, system_prompt=SYSTEM_PROMPT, tools=TOOLS_SCHEMA, max_tool_steps=MAX_TOOL_STEPS):
