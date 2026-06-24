@@ -4,37 +4,69 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 
 # ─── Allowed base directory (anchored relative to this file's parent) ───
 ALLOWED_BASE = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
 
 _IS_WINDOWS = platform.system() == "Windows"
 
+
+def _bash_is_usable(bash_path: str) -> bool:
+    """Return False if bash_path is the WSL stub with no distro installed.
+
+    On Windows, ``shutil.which("bash")`` may resolve to the WSL launcher
+    (``C:\\Windows\\System32\\bash.exe``).  When no WSL distro is installed
+    that stub exits with a non-zero code and prints the 'no distributions'
+    error — before the real command ever runs.  We probe it with
+    ``bash --version`` (timeout 3 s) and treat any non-zero exit as unusable.
+
+    On non-Windows platforms, or when ``WSL_DISTRO_NAME`` is already set
+    (meaning we *are* inside WSL), always return True to skip the probe.
+    """
+    if not _IS_WINDOWS:
+        return True
+    if os.environ.get("WSL_DISTRO_NAME"):
+        # We are running inside WSL — bash is definitely usable.
+        return True
+    try:
+        r = subprocess.run(
+            [bash_path, "--version"],
+            capture_output=True,
+            timeout=3,
+            stdin=subprocess.DEVNULL,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 def _resolve_shell() -> tuple[str | None, bool]:
     """Return (executable_path_or_None, use_shell_bool) for subprocess.
 
-    On Windows: first try to locate bash.exe (Git Bash / WSL), then fall back
-    to cmd.exe via shell=True (executable=None).
+    On Windows: first try to locate a *usable* bash.exe (Git Bash / working
+    WSL), then fall back to cmd.exe via shell=True (executable=None).
     On Unix: prefer /bin/bash, fall back to /bin/sh, then shell=True fallback.
     Returns (executable, shell) tuple.
     """
     if _IS_WINDOWS:
-        # Prefer bash if available (Git Bash, WSL, etc.)
+        # Prefer bash if available and usable (Git Bash, working WSL, etc.)
         bash_path = shutil.which("bash")
-        if bash_path:
+        if bash_path and _bash_is_usable(bash_path):
             return bash_path, True
         for path in (
             r"C:\Program Files\Git\bin\bash.exe",
             r"C:\Program Files\Git\usr\bin\bash.exe",
             r"C:\Program Files (x86)\Git\bin\bash.exe",
         ):
-            if os.path.isfile(path):
+            if os.path.isfile(path) and _bash_is_usable(path):
                 return path, True
         return None, True  # cmd.exe is resolved automatically by Windows
     for candidate in ("/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"):
         if os.path.isfile(candidate):
             return candidate, True
     return None, True  # last-resort: let the OS pick
+
 
 _SHELL_EXECUTABLE, _SHELL_USE_SHELL = _resolve_shell()
 
@@ -143,6 +175,7 @@ DANGEROUS_PATTERNS = [
 if not _IS_WINDOWS:
     DANGEROUS_PATTERNS.append("format")
 
+
 def _is_dangerous(command: str) -> str | None:
     """Check if a command contains blacklisted patterns. Returns a reason or None."""
     lower = command.lower().strip()
@@ -194,7 +227,8 @@ def _is_readonly_bash(command: str) -> bool:
         return sub in READONLY_GIT_SUBCMDS
     # Use READONLY_BASH when a bash-compatible shell is active (even on Windows),
     # fall back to READONLY_CMD only when running plain cmd.exe.
-    is_bash = not _IS_WINDOWS or (_SHELL_EXECUTABLE is not None and "bash" in _SHELL_EXECUTABLE.lower())
+    is_bash = not _IS_WINDOWS or (
+        _SHELL_EXECUTABLE is not None and "bash" in _SHELL_EXECUTABLE.lower())
     readonly_set = READONLY_BASH if is_bash else READONLY_CMD
     return head in readonly_set
 
@@ -219,11 +253,12 @@ def confirm_action(name: str, args) -> bool:
         print(f"      $ {args.get('command', '')}")
     elif name == "write_file":
         content = args.get("content", "")
-        print(f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
+        print(
+            f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
     else:
         print(f"      {name}: {args}")
     try:
-        answer = input("  Approve? [y/N] ").strip().lower()
+        answer = input("  Approve? [Y/n] ").strip().lower()
     except EOFError:
         answer = ""
-    return answer in ("y", "yes")
+    return answer in ("y", "yes", "")
