@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tomllib
+from typing import cast
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -134,9 +135,25 @@ def test_read_file_not_found(mock_exists, mock_safe_path):
     assert "Error: file 'test.txt' not found." in jurbas_code.tools.read_file("test.txt")
 
 
+@patch("jurbas_code.tools.safe_path")
+@patch("os.path.exists")
+@patch("os.path.isdir")
+def test_read_file_directory_error(mock_isdir, mock_exists, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/dir"
+    mock_exists.return_value = True
+    mock_isdir.return_value = True
+    result = jurbas_code.tools.read_file("dir")
+    assert "is a directory, not a file" in result
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # list_directory()
 # ═══════════════════════════════════════════════════════════════════════
+
+def test_list_directory_non_string_path():
+    result = jurbas_code.tools.list_directory(cast(str, None))
+    assert "dir_path must be a string" in result
+
 
 @patch("jurbas_code.tools.safe_path")
 @patch("os.path.exists")
@@ -190,6 +207,18 @@ def test_list_directory_not_a_dir(mock_safe_path):
 # ═══════════════════════════════════════════════════════════════════════
 # write_file()
 # ═══════════════════════════════════════════════════════════════════════
+
+def test_write_file_non_string_arguments():
+    assert "file_path must be a string" in jurbas_code.tools.write_file(cast(str, None), "content")
+    assert "content must be a string" in jurbas_code.tools.write_file("test.txt", cast(str, None))
+
+
+@patch("jurbas_code.tools.safe_path", return_value="/allowed/dir")
+@patch("jurbas_code.tools.os.path.isdir", return_value=True)
+def test_write_file_directory_error(mock_isdir, mock_safe_path):
+    result = jurbas_code.tools.write_file("dir", "content")
+    assert "is a directory" in result
+
 
 @patch("jurbas_code.tools.safe_path")
 @patch("jurbas_code.tools.os.makedirs")
@@ -560,28 +589,28 @@ class TestWebSearch:
 
     def test_missing_library(self):
         """Graceful message when duckduckgo_search is not installed."""
-        with patch('main.HAS_WEB_SEARCH', False):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', False):
             result = main.web_search("test query")
             assert "not installed" in result
             assert "duckduckgo-search" in result
 
     def test_empty_query(self):
         """Empty or whitespace query should be rejected."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             assert "non-empty string" in main.web_search("")
             assert "non-empty string" in main.web_search("   ")
 
     def test_non_string_query(self):
         """Non-string query should be rejected."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             assert "non-empty string" in main.web_search(123)
             assert "non-empty string" in main.web_search(None)
             assert "non-empty string" in main.web_search([])
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_max_results_clamped_low(self, mock_ddgs_class):
         """max_results < 1 should be clamped to default 5."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = []
@@ -589,10 +618,10 @@ class TestWebSearch:
             main.web_search("python", max_results=0)
             mock_instance.text.assert_called_with("python", max_results=5)
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_max_results_clamped_high(self, mock_ddgs_class):
         """max_results > 20 should be clamped to default 5."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = []
@@ -600,10 +629,10 @@ class TestWebSearch:
             main.web_search("python", max_results=100)
             mock_instance.text.assert_called_with("python", max_results=5)
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_successful_search(self, mock_ddgs_class):
         """Valid search returns formatted results."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [
@@ -618,10 +647,10 @@ class TestWebSearch:
             assert "Full pytest documentation" in result
             mock_instance.text.assert_called_once_with("pytest", max_results=1)
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_no_results(self, mock_ddgs_class):
         """Empty result list from DDGS."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = []
@@ -629,10 +658,10 @@ class TestWebSearch:
             result = main.web_search("nonexistent_xyz")
             assert "No results found" in result
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_link_fallback(self, mock_ddgs_class):
         """Use 'link' key when 'href' is not present."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [
@@ -642,10 +671,10 @@ class TestWebSearch:
             result = main.web_search("example", max_results=1)
             assert "https://example.org" in result
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_snippet_truncation(self, mock_ddgs_class):
         """Long snippets are truncated at 300 characters."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             long_body = "A" * 500
@@ -659,10 +688,10 @@ class TestWebSearch:
             # Should not contain the full 500 chars
             assert long_body not in result
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_api_error(self, mock_ddgs_class):
         """DDGS exception is caught and reported."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.side_effect = Exception("Rate limit exceeded")
@@ -671,10 +700,10 @@ class TestWebSearch:
             assert "Error performing web search" in result
             assert "Rate limit exceeded" in result
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_multiple_results_formatting(self, mock_ddgs_class):
         """Multiple results are numbered and separated."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [
@@ -691,10 +720,10 @@ class TestWebSearch:
             assert "3. Result C" in result
             mock_instance.text.assert_called_once_with("test", max_results=3)
 
-    @patch('main.DDGS')
+    @patch('jurbas_code.tools.DDGS')
     def test_missing_fields_in_result(self, mock_ddgs_class):
         """Result with missing optional fields (title/href/body) should not crash."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [

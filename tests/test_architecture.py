@@ -1,4 +1,6 @@
 import importlib
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -42,6 +44,18 @@ def test_provider_no_immediate_network():
     # This is partially covered by test_modules_importable, but we can be explicit
     import jurbas_code.providers as providers
     assert hasattr(providers, 'get_claude_client')
+
+
+def test_provider_import_does_not_import_security_subprocess():
+    """Importing provider-only code must not trigger shell/security import side effects."""
+    repo_root = Path(__file__).resolve().parents[1]
+    code = (
+        "import sys; "
+        "import jurbas_code.providers; "
+        "raise SystemExit(1 if 'jurbas_code.security' in sys.modules else 0)"
+    )
+    result = subprocess.run([sys.executable, "-c", code], cwd=repo_root)
+    assert result.returncode == 0
 
 
 def test_no_legacy_claude_3_7_model_hardcode():

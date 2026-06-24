@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from main import _is_dangerous, _is_readonly_bash, _requires_confirmation, confirm_action, run_bash, web_search
+import jurbas_code.tools
 
 
 class TestMain(unittest.TestCase):
@@ -44,7 +45,7 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_no_library(self):
         """Should report missing library gracefully when duckduckgo_search is not installed."""
-        with patch('main.HAS_WEB_SEARCH', False):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', False):
             result = web_search("test query")
             self.assertIn("not installed", result)
             # Should mention how to install
@@ -52,7 +53,7 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_empty_query(self):
         """Should reject empty or whitespace-only queries."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             result = web_search("")
             self.assertIn("non-empty string", result)
             result = web_search("   ")
@@ -60,7 +61,7 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_non_string_query(self):
         """Should reject non-string queries."""
-        with patch('main.HAS_WEB_SEARCH', True):
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
             result = web_search(123)
             self.assertIn("non-empty string", result)
             result = web_search(None)
@@ -68,8 +69,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_invalid_max_results_clamped(self):
         """max_results out of range (1-20) should be clamped to default 5."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 mock_instance.text.return_value = []
@@ -82,8 +83,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_max_results_too_high_clamped(self):
         """max_results > 20 should be clamped to default 5."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 mock_instance.text.return_value = []
@@ -94,8 +95,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_success(self):
         """Should return formatted results for a valid search."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 mock_instance.text.return_value = [
@@ -119,8 +120,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_no_results(self):
         """Should handle empty results gracefully."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 mock_instance.text.return_value = []
@@ -130,8 +131,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_with_link_fallback(self):
         """Should handle results where the URL key is 'link' instead of 'href'."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 mock_instance.text.return_value = [
@@ -143,8 +144,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_snippet_truncation(self):
         """Long snippets should be truncated at 300 chars."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 long_body = "x" * 500
@@ -159,8 +160,8 @@ class TestMain(unittest.TestCase):
 
     def test_web_search_api_error(self):
         """Should handle DDGS exceptions gracefully."""
-        with patch('main.HAS_WEB_SEARCH', True):
-            with patch('main.DDGS') as mock_ddgs_class:
+        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+            with patch('jurbas_code.tools.DDGS') as mock_ddgs_class:
                 mock_instance = MagicMock()
                 mock_ddgs_class.return_value.__enter__.return_value = mock_instance
                 mock_instance.text.side_effect = Exception("Connection timeout")

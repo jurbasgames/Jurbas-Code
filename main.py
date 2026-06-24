@@ -16,17 +16,10 @@ if sys.platform == "win32":
     except AttributeError:
         pass
 
-try:
-    from duckduckgo_search import DDGS
-    HAS_WEB_SEARCH = True
-except ImportError:
-    DDGS = None
-    HAS_WEB_SEARCH = False
-
-# Re-export all public symbols so that ``import main`` and
+# Re-export public symbols so that ``import main`` and
 # ``from main import safe_path`` continue to work (backwards compat).
-from jurbas_code import (      # noqa: F401
-    __version__,
+from jurbas_code import __version__  # noqa: F401
+from jurbas_code.security import (  # noqa: F401
     ALLOWED_BASE,
     MAX_TOOL_STEPS,
     safe_path,
@@ -36,8 +29,10 @@ from jurbas_code import (      # noqa: F401
     _is_readonly_bash,
     _requires_confirmation,
     confirm_action,
-    SYSTEM_PROMPT,
-    tools_schema as tools,
+)
+from jurbas_code.prompts import SYSTEM_PROMPT  # noqa: F401
+from jurbas_code.tool_schemas import tools as tools  # noqa: F401
+from jurbas_code.tools import (  # noqa: F401
     TOOL_HANDLERS,
     read_file,
     list_directory,
@@ -45,6 +40,7 @@ from jurbas_code import (      # noqa: F401
     run_bash,
     web_search,
     HAS_WEB_SEARCH,
+    DDGS,
 )
 
 from jurbas_code.providers import (

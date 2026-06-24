@@ -15,6 +15,8 @@ def test_exported_symbols():
 
 def test_system_prompt_mentions_extracted_package_files():
     assert "main.py" in SYSTEM_PROMPT
+    assert "jurbas_code/agent.py" in SYSTEM_PROMPT
+    assert "jurbas_code/tools.py" in SYSTEM_PROMPT
     assert "jurbas_code/prompts.py" in SYSTEM_PROMPT
     assert "jurbas_code/tool_schemas.py" in SYSTEM_PROMPT
 

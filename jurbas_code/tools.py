@@ -15,11 +15,12 @@ from jurbas_code.security import (
     confirm_action,
 )
 
+DDGS = None
 try:
-    from duckduckgo_search import DDGS
+    from duckduckgo_search import DDGS as _DDGS
+    DDGS = _DDGS
     HAS_WEB_SEARCH = True
 except ImportError:
-    DDGS = None
     HAS_WEB_SEARCH = False
 
 BASH_TIMEOUT = 300
@@ -38,6 +39,8 @@ def read_file(file_path: str) -> str:
         return "<REDACTED: .env content is hidden from model for security>"
     if not os.path.exists(full):
         return f"Error: file '{file_path}' not found."
+    if os.path.isdir(full):
+        return f"Error: '{file_path}' is a directory, not a file."
     try:
         with open(full, "r", encoding="utf-8") as f:
             return f.read()
@@ -46,6 +49,8 @@ def read_file(file_path: str) -> str:
 
 
 def list_directory(dir_path: str) -> str:
+    if not isinstance(dir_path, str):
+        return "Error: dir_path must be a string."
     try:
         full = safe_path(dir_path)
     except PermissionError as e:
@@ -78,10 +83,16 @@ def list_directory(dir_path: str) -> str:
 
 
 def write_file(file_path: str, content: str) -> str:
+    if not isinstance(file_path, str):
+        return "Error: file_path must be a string."
+    if not isinstance(content, str):
+        return "Error: content must be a string."
     try:
         full = safe_path(file_path)
     except PermissionError as e:
         return f"Error: {e}"
+    if os.path.isdir(full):
+        return f"Error: '{file_path}' is a directory."
     try:
         os.makedirs(os.path.dirname(full), exist_ok=True)
         backup_note = ""
@@ -144,8 +155,7 @@ def run_bash(command: str) -> str:
 
 
 def web_search(query: str, max_results: int = 5) -> str:
-    import main
-    if not getattr(main, "HAS_WEB_SEARCH", False):
+    if not HAS_WEB_SEARCH or DDGS is None:
         return (
             "Error: 'duckduckgo_search' library is not installed. "
             "Install it with: uv add duckduckgo-search  (or pip install duckduckgo-search)"
@@ -155,8 +165,7 @@ def web_search(query: str, max_results: int = 5) -> str:
     if not isinstance(max_results, int) or max_results < 1 or max_results > 20:
         max_results = 5
     try:
-        ddgs_class = getattr(main, "DDGS")
-        with ddgs_class() as ddgs:
+        with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
     except Exception as e:
         return f"Error performing web search: {e}"
