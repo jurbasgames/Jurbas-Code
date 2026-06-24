@@ -12,8 +12,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 import main
-import jurbas.security
-import jurbas.tools
+import jurbas_code.security
+import jurbas_code.tools
 
 
 @pytest.fixture(autouse=True)
@@ -40,14 +40,14 @@ def clean_history():
 
 def test_safe_path_relative_resolves_against_allowed_base():
     """A relative path is joined with ALLOWED_BASE before resolution."""
-    resolved = jurbas.security.safe_path("sub/file.txt")
-    assert resolved.startswith(jurbas.security.ALLOWED_BASE)
+    resolved = jurbas_code.security.safe_path("sub/file.txt")
+    assert resolved.startswith(jurbas_code.security.ALLOWED_BASE)
 
 
 def test_safe_path_outside_raises():
     """An absolute path outside ALLOWED_BASE raises PermissionError."""
     with pytest.raises(PermissionError, match="Path not allowed"):
-        jurbas.security.safe_path("//TMP/escaping.txt")
+        jurbas_code.security.safe_path("//TMP/escaping.txt")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -55,26 +55,26 @@ def test_safe_path_outside_raises():
 # ═══════════════════════════════════════════════════════════════════════
 
 def test_is_secret_path_true_for_dotenv():
-    assert jurbas.security.is_secret_path(".env") is True
-    assert jurbas.security.is_secret_path(".env.local") is True
-    assert jurbas.security.is_secret_path("path/to/.env.production") is True
+    assert jurbas_code.security.is_secret_path(".env") is True
+    assert jurbas_code.security.is_secret_path(".env.local") is True
+    assert jurbas_code.security.is_secret_path("path/to/.env.production") is True
 
 
 def test_is_secret_path_false_for_normal_file():
-    assert jurbas.security.is_secret_path("main.py") is False
-    assert jurbas.security.is_secret_path("README.md") is False
+    assert jurbas_code.security.is_secret_path("main.py") is False
+    assert jurbas_code.security.is_secret_path("README.md") is False
 
 
 def test_is_secret_path_true_for_private_key():
-    assert jurbas.security.is_secret_path("id_rsa") is True
-    assert jurbas.security.is_secret_path("credentials.pem") is True
+    assert jurbas_code.security.is_secret_path("id_rsa") is True
+    assert jurbas_code.security.is_secret_path("credentials.pem") is True
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # load_dotenv()
 # ═══════════════════════════════════════════════════════════════════════
 
-@patch("jurbas.security.safe_path")
+@patch("jurbas_code.security.safe_path")
 @patch.dict("os.environ", {}, clear=True)
 def test_load_dotenv_sets_vars(mock_safe_path, tmp_path):
     """A simple .env file populates os.environ."""
@@ -82,13 +82,13 @@ def test_load_dotenv_sets_vars(mock_safe_path, tmp_path):
     env_file.write_text("FOO=bar\nBAZ=qux\n")
     mock_safe_path.return_value = str(env_file)
 
-    jurbas.security.load_dotenv(str(env_file))
+    jurbas_code.security.load_dotenv(str(env_file))
 
     assert os.environ.get("FOO") == "bar"
     assert os.environ.get("BAZ") == "qux"
 
 
-@patch("jurbas.security.safe_path")
+@patch("jurbas_code.security.safe_path")
 @patch.dict("os.environ", {"EXISTING": "keep"}, clear=True)
 def test_load_dotenv_does_not_overwrite(mock_safe_path, tmp_path):
     """Existing env vars are NOT overwritten by .env."""
@@ -96,7 +96,7 @@ def test_load_dotenv_does_not_overwrite(mock_safe_path, tmp_path):
     env_file.write_text("EXISTING=overwrite\nNEW=added\n")
     mock_safe_path.return_value = str(env_file)
 
-    jurbas.security.load_dotenv(str(env_file))
+    jurbas_code.security.load_dotenv(str(env_file))
 
     assert os.environ["EXISTING"] == "keep"
 
@@ -105,7 +105,7 @@ def test_load_dotenv_does_not_overwrite(mock_safe_path, tmp_path):
 # read_file()
 # ═══════════════════════════════════════════════════════════════════════
 
-@patch("jurbas.tools.safe_path")
+@patch("jurbas_code.tools.safe_path")
 @patch("os.path.exists")
 @patch("builtins.open", new_callable=MagicMock)
 def test_read_file_success(mock_open, mock_exists, mock_safe_path):
@@ -116,29 +116,29 @@ def test_read_file_success(mock_open, mock_exists, mock_safe_path):
     mock_file.read.return_value = "file content"
     mock_open.return_value.__enter__.return_value = mock_file
 
-    assert jurbas.tools.read_file("test.txt") == "file content"
+    assert jurbas_code.tools.read_file("test.txt") == "file content"
     mock_open.assert_called_once_with("/allowed/test.txt", "r", encoding="utf-8")
 
 
-@patch("jurbas.tools.safe_path")
+@patch("jurbas_code.tools.safe_path")
 def test_read_file_permission_error(mock_safe_path):
     mock_safe_path.side_effect = PermissionError("Path not allowed: test.txt")
-    assert "Error: Path not allowed: test.txt" in jurbas.tools.read_file("test.txt")
+    assert "Error: Path not allowed: test.txt" in jurbas_code.tools.read_file("test.txt")
 
 
-@patch("jurbas.tools.safe_path")
+@patch("jurbas_code.tools.safe_path")
 @patch("os.path.exists")
 def test_read_file_not_found(mock_exists, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
     mock_exists.return_value = False
-    assert "Error: file 'test.txt' not found." in jurbas.tools.read_file("test.txt")
+    assert "Error: file 'test.txt' not found." in jurbas_code.tools.read_file("test.txt")
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # list_directory()
 # ═══════════════════════════════════════════════════════════════════════
 
-@patch("jurbas.tools.safe_path")
+@patch("jurbas_code.tools.safe_path")
 @patch("os.path.exists")
 @patch("os.path.isdir")
 @patch("os.listdir")
@@ -159,31 +159,31 @@ def test_list_directory_success(mock_getsize, mock_listdir, mock_isdir,
     mock_listdir.return_value = ["file1.txt", "subdir"]
     mock_getsize.return_value = 1024  # 1.0 KB
 
-    result = jurbas.tools.list_directory("dir")
+    result = jurbas_code.tools.list_directory("dir")
 
     assert "Contents of 'dir' (2 items):" in result
     assert "[FILE] file1.txt (1.0 KB)" in result
     assert "[DIR] subdir" in result
 
 
-@patch("jurbas.tools.safe_path", side_effect=PermissionError("Path not allowed"))
+@patch("jurbas_code.tools.safe_path", side_effect=PermissionError("Path not allowed"))
 def test_list_directory_permission_error(mock_safe_path):
-    result = jurbas.tools.list_directory("bad")
+    result = jurbas_code.tools.list_directory("bad")
     assert "Error: Path not allowed" in result
 
 
-@patch("jurbas.tools.safe_path", return_value="/allowed/missing")
+@patch("jurbas_code.tools.safe_path", return_value="/allowed/missing")
 def test_list_directory_not_found(mock_safe_path):
     with patch("os.path.exists", return_value=False):
-        result = jurbas.tools.list_directory("missing")
+        result = jurbas_code.tools.list_directory("missing")
     assert "Error: directory 'missing' not found." in result
 
 
-@patch("jurbas.tools.safe_path", return_value="/allowed/file.txt")
+@patch("jurbas_code.tools.safe_path", return_value="/allowed/file.txt")
 def test_list_directory_not_a_dir(mock_safe_path):
     with patch("os.path.exists", return_value=True):
         with patch("os.path.isdir", return_value=False):
-            result = jurbas.tools.list_directory("file.txt")
+            result = jurbas_code.tools.list_directory("file.txt")
     assert "Error: 'file.txt' is not a directory." in result
 
 
@@ -191,11 +191,11 @@ def test_list_directory_not_a_dir(mock_safe_path):
 # write_file()
 # ═══════════════════════════════════════════════════════════════════════
 
-@patch("jurbas.tools.safe_path")
-@patch("jurbas.tools.os.makedirs")
-@patch("jurbas.tools.os.path.exists")
-@patch("jurbas.tools.shutil.copy2")
-@patch("jurbas.tools.os.path.getsize")
+@patch("jurbas_code.tools.safe_path")
+@patch("jurbas_code.tools.os.makedirs")
+@patch("jurbas_code.tools.os.path.exists")
+@patch("jurbas_code.tools.shutil.copy2")
+@patch("jurbas_code.tools.os.path.getsize")
 def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
                             mock_makedirs, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
@@ -205,7 +205,7 @@ def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
     with patch("builtins.open", MagicMock()) as mock_open:
         mock_file = MagicMock()
         mock_open.return_value.__enter__.return_value = mock_file
-        result = jurbas.tools.write_file("test.txt", "file content")
+        result = jurbas_code.tools.write_file("test.txt", "file content")
 
     mock_makedirs.assert_called_once_with("/allowed", exist_ok=True)
     mock_open.assert_called_once_with("/allowed/test.txt", "w", encoding="utf-8")
@@ -214,11 +214,11 @@ def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
     assert "written successfully (12 bytes)" in result
 
 
-@patch("jurbas.tools.safe_path")
-@patch("jurbas.tools.os.makedirs")
-@patch("jurbas.tools.os.path.exists")
-@patch("jurbas.tools.shutil.copy2")
-@patch("jurbas.tools.os.path.getsize")
+@patch("jurbas_code.tools.safe_path")
+@patch("jurbas_code.tools.os.makedirs")
+@patch("jurbas_code.tools.os.path.exists")
+@patch("jurbas_code.tools.shutil.copy2")
+@patch("jurbas_code.tools.os.path.getsize")
 def test_write_file_with_backup(mock_getsize, mock_copy2, mock_exists,
                                 mock_makedirs, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
@@ -226,16 +226,16 @@ def test_write_file_with_backup(mock_getsize, mock_copy2, mock_exists,
     mock_getsize.return_value = 12
 
     with patch("builtins.open", MagicMock()):
-        result = jurbas.tools.write_file("test.txt", "file content")
+        result = jurbas_code.tools.write_file("test.txt", "file content")
 
     mock_copy2.assert_called_once_with("/allowed/test.txt",
                                        "/allowed/test.txt.bak")
     assert "previous version backed up to 'test.txt.bak'" in result
 
 
-@patch("jurbas.tools.safe_path", side_effect=PermissionError("Path not allowed"))
+@patch("jurbas_code.tools.safe_path", side_effect=PermissionError("Path not allowed"))
 def test_write_file_permission_error(mock_safe_path):
-    result = jurbas.tools.write_file("bad.txt", "content")
+    result = jurbas_code.tools.write_file("bad.txt", "content")
     assert "Error: Path not allowed" in result
 
 
@@ -243,7 +243,7 @@ def test_write_file_permission_error(mock_safe_path):
 # run_bash()
 # ═══════════════════════════════════════════════════════════════════════
 
-@patch("jurbas.tools.subprocess.run")
+@patch("jurbas_code.tools.subprocess.run")
 def test_run_bash_success(mock_run):
     mock_result = MagicMock()
     mock_result.stdout = "hello world\n"
@@ -251,13 +251,13 @@ def test_run_bash_success(mock_run):
     mock_result.returncode = 0
     mock_run.return_value = mock_result
 
-    result = jurbas.tools.run_bash("echo hello")
+    result = jurbas_code.tools.run_bash("echo hello")
     assert "hello world" in result
 
 
-@patch("jurbas.tools.subprocess.run", side_effect=Exception("Boom"))
+@patch("jurbas_code.tools.subprocess.run", side_effect=Exception("Boom"))
 def test_run_bash_error(mock_run):
-    result = jurbas.tools.run_bash("fail")
+    result = jurbas_code.tools.run_bash("fail")
     assert "Error executing command" in result
 
 
@@ -347,7 +347,7 @@ def test_main_loop_streams_content(mock_print, mock_input, mock_openai):
 @patch("openai.OpenAI")
 @patch("builtins.input")
 @patch("builtins.print")
-@patch("jurbas.tools.read_file")
+@patch("jurbas_code.tools.read_file")
 def test_main_loop_with_tool_call(mock_read_file, mock_print,
                                   mock_input, mock_openai):
     """A tool-call in the stream leads to tool execution."""
@@ -525,19 +525,19 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
 # ═══════════════════════════════════════════════════════════════════════
 
 def test_version_attribute_is_nonempty_string():
-    import jurbas
-    assert isinstance(jurbas.__version__, str) and jurbas.__version__
-    assert main.__version__ == jurbas.__version__
+    import jurbas_code
+    assert isinstance(jurbas_code.__version__, str) and jurbas_code.__version__
+    assert main.__version__ == jurbas_code.__version__
 
 
 def test_source_checkout_version_fallback_reads_pyproject():
-    import jurbas
+    import jurbas_code
 
     pyproject = tomllib.loads(
         (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
     )
 
-    assert jurbas._read_version_from_pyproject() == pyproject["project"]["version"]
+    assert jurbas_code._read_version_from_pyproject() == pyproject["project"]["version"]
 
 
 def test_main_version_flag_exits_zero_and_prints(capsys):

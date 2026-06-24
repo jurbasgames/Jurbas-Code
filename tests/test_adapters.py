@@ -1,4 +1,4 @@
-from jurbas.adapters import convert_messages_to_anthropic, convert_to_anthropic_tools
+from jurbas_code.providers import convert_messages_to_anthropic, convert_to_anthropic_tools
 
 
 def test_adapters_merge_tool_result_into_existing_user_message():

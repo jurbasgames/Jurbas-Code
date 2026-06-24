@@ -25,7 +25,7 @@ except ImportError:
 
 # Re-export all public symbols so that ``import main`` and
 # ``from main import safe_path`` continue to work (backwards compat).
-from jurbas import (           # noqa: F401
+from jurbas_code import (      # noqa: F401
     __version__,
     ALLOWED_BASE,
     MAX_TOOL_STEPS,

@@ -2,15 +2,15 @@ import importlib
 from pathlib import Path
 
 import pytest
-from jurbas import security, tools, prompts, adapters, providers, agent
+from jurbas_code import security, tools, prompts, providers, agent, tool_schemas
 
 @pytest.mark.parametrize("module_name", [
-    "jurbas.security",
-    "jurbas.tools",
-    "jurbas.prompts",
-    "jurbas.adapters",
-    "jurbas.providers",
-    "jurbas.agent",
+    "jurbas_code.security",
+    "jurbas_code.tools",
+    "jurbas_code.prompts",
+    "jurbas_code.tool_schemas",
+    "jurbas_code.providers",
+    "jurbas_code.agent",
     "main",
 ])
 def test_modules_importable(module_name):
@@ -22,7 +22,7 @@ def test_modules_importable(module_name):
 
 def test_tool_names_match_handlers():
     """Ensure every tool defined in the schema has a corresponding handler."""
-    schema_tool_names = {t["function"]["name"] for t in tools.tools}
+    schema_tool_names = {t["function"]["name"] for t in tool_schemas.tools}
     handler_names = set(tools.TOOL_HANDLERS.keys())
 
     assert schema_tool_names == handler_names, (
@@ -40,7 +40,7 @@ def test_main_as_entrypoint():
 def test_provider_no_immediate_network():
     """Verify that importing providers doesn't attempt network or key validation immediately."""
     # This is partially covered by test_modules_importable, but we can be explicit
-    import jurbas.providers as providers
+    import jurbas_code.providers as providers
     assert hasattr(providers, 'get_claude_client')
 
 
