@@ -101,15 +101,10 @@ def write_file(file_path: str, content: str) -> str:
         return f"Error: '{file_path}' is a directory."
     try:
         os.makedirs(os.path.dirname(full), exist_ok=True)
-        backup_note = ""
-        if os.path.exists(full):
-            backup = full + ".bak"
-            shutil.copy2(full, backup)
-            backup_note = f" (previous version backed up to '{os.path.basename(backup)}')"
         with open(full, "w", encoding="utf-8") as f:
             f.write(content)
         size = os.path.getsize(full)
-        return f"File '{file_path}' written successfully ({size} bytes).{backup_note}"
+        return f"File '{file_path}' written successfully ({size} bytes)."
     except Exception as e:
         return f"Error writing file: {e}"
 
