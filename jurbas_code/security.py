@@ -188,6 +188,7 @@ def _is_dangerous(command: str) -> str | None:
     return None
 
 
+# ─── Readonly / mutation detection for Bash tool ───
 READONLY_BASH = {
     "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "tree",
     "stat", "file", "which", "whoami", "date", "echo", "env", "du", "df", "uname",
@@ -196,26 +197,14 @@ READONLY_BASH = {
 READONLY_CMD = {
     "dir", "type", "echo", "date", "time", "ver", "whoami",
     "where", "tree", "set", "path", "hostname",
-    "systeminfo",
+}
+READONLY_GIT_SUBCMDS = {
+    "status", "log", "diff", "show",
+    "ls-files", "rev-parse", "blame", "describe",
 }
 SHELL_OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(", "&")
 MUTATING_FLAGS = {"-d", "-D", "--delete", "-f", "--force", "--prune", "--hard"}
-READONLY_SUBCMDS = {
-    "git": {
-        "status", "log", "diff", "show", "ls-files", "rev-parse", "blame", "describe",
-        "help", "version", "ls-tree", "cat-file"
-    },
-    "gh": {
-        "status", "issue list", "issue view", "pr list", "pr view", "pr status", "pr diff",
-        "run list", "run view", "repo view", "search", "help", "version"
-    },
-    "pip": {"list", "show", "search", "help", "--version"},
-    "pip3": {"list", "show", "search", "help", "--version"},
-    "uv": {"pip list", "pip show", "tree", "help", "--version"},
-    "npm": {"list", "ls", "ll", "la", "show", "view", "outdated", "help", "--version", "-v"},
-    "cargo": {"metadata", "verify-project", "pkgid", "tree", "help", "--version", "-v"},
-    "winget": {"search", "show", "list", "features", "help", "--version", "-v"},
-}
+
 
 def _is_readonly_bash(command: str) -> bool:
     """Best-effort check: True only for commands that clearly cannot mutate state.
@@ -232,34 +221,10 @@ def _is_readonly_bash(command: str) -> bool:
     tokens = cmd.split()
     if any(t in MUTATING_FLAGS for t in tokens):
         return False
-
     head = tokens[0].lower()
-
-    # Check if this tool uses subcommand checking
-    if head in READONLY_SUBCMDS:
-        # Check subcommands
-        allowed = READONLY_SUBCMDS[head]
-        # For simple check: try to find if any allowed subcommand is present right after the head
-        # We can reconstruct subcommands of length 2 (e.g., 'pr list')
-        cmd_words = [t.lower() for t in tokens[1:]]
-        if not cmd_words:
-            # Command is just the head (e.g. 'git', 'gh', 'pip')
-            # Typically these just print help/version, but let's check if 'help' or '--version' is explicitly allowed or if head is safe alone.
-            return "--help" in tokens or "-h" in tokens or "--version" in tokens or "-v" in tokens or "help" in allowed
-
-        # Check if the exact subcommand or flags match
-        # Try two words first (e.g., "pr list"), then one word (e.g., "status")
-        if len(cmd_words) >= 2:
-            two_words = f"{cmd_words[0]} {cmd_words[1]}"
-            if two_words in allowed:
-                return True
-        if cmd_words[0] in allowed:
-            return True
-        # Allow general help or version checks
-        if any(h in cmd_words for h in ["--help", "-h", "help", "--version", "-v"]):
-            return True
-        return False
-
+    if head == "git":
+        sub = tokens[1] if len(tokens) > 1 else ""
+        return sub in READONLY_GIT_SUBCMDS
     # Use READONLY_BASH when a bash-compatible shell is active (even on Windows),
     # fall back to READONLY_CMD only when running plain cmd.exe.
     is_bash = not _IS_WINDOWS or (
