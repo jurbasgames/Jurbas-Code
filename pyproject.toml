@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
+env-file = ".env"
 dependencies = [
     "anthropic>=0.92.0",
     "openai>=2.42.0",
