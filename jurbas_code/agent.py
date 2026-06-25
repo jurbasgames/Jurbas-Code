@@ -35,7 +35,8 @@ class Agent:
         self.session_tokens = {"prompt": 0, "completion": 0, "total": 0}
 
     def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
-        self.messages.append({"role": "user", "content": user_input})
+        if user_input:
+            self.messages.append({"role": "user", "content": user_input})
         model = resolve_provider_model(self.provider, self.client)
 
         for _step in range(self.max_tool_steps):

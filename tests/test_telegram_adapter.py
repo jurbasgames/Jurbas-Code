@@ -89,16 +89,14 @@ def test_telegram_adapter_handle_update_text_msg():
         })
 
 
-def test_telegram_adapter_handle_update_mutating_actions_blocked():
+def test_telegram_adapter_handle_update_mutating_actions_trigger_markup():
     mock_agent = MagicMock()
+    mock_agent.messages = []
     
     def mock_chat_with_confirm(user_input, on_ai_reply, confirm_handler):
-        # Trigger confirm handler to test if it automatically declines mutating tools
-        allowed = confirm_handler("write_file", {"file_path": "a.txt"})
-        if not allowed:
-            on_ai_reply("Declined action.")
-        else:
-            on_ai_reply("Allowed action.")
+        # Trigger confirm handler to test if it raises interrupt
+        confirm_handler("write_file", {"file_path": "a.txt"})
+        on_ai_reply("This should not be reached.")
 
     mock_agent.chat.side_effect = mock_chat_with_confirm
     agent_factory = lambda: mock_agent
@@ -115,10 +113,70 @@ def test_telegram_adapter_handle_update_mutating_actions_blocked():
         
         adapter.handle_update(update)
         
-        # Verify it declined (confirm_handler returned False)
+        # Verify inline keyboard confirmation was sent
         mock_api_call.assert_called_once_with("sendMessage", {
             "chat_id": 888,
-            "text": "Declined action."
+            "text": "⚠️ **Action Confirmation Required**:\nTool: `write_file`\nArguments: `{\n  \"file_path\": \"a.txt\"\n}`",
+            "reply_markup": {
+                "inline_keyboard": [[
+                    {"text": "✅ Approve", "callback_data": "approve"},
+                    {"text": "❌ Decline", "callback_data": "decline"}
+                ]]
+            }
+        })
+        # Verify approval is now pending
+        assert 888 in adapter.pending_approvals
+        assert adapter.pending_approvals[888]["name"] == "write_file"
+
+
+def test_telegram_adapter_handle_callback_query_approve():
+    mock_agent = MagicMock()
+    # Tool output mock
+    mock_agent.messages = [{"role": "assistant", "tool_calls": [{"id": "tc123", "type": "function", "function": {"name": "write_file"}}]}]
+
+    def mock_chat_continuation(user_input, on_ai_reply, confirm_handler):
+        assert user_input == ""
+        on_ai_reply("Write completed.")
+
+    mock_agent.chat.side_effect = mock_chat_continuation
+
+    adapter = TelegramAdapter("dummy_token", lambda: mock_agent)
+    adapter.pending_approvals[777] = {
+        "name": "write_file",
+        "args": {"file_path": "a.txt", "content": "hello"},
+        "agent": mock_agent
+    }
+
+    with patch.object(adapter, "_api_call") as mock_api_call, \
+         patch("jurbas_code.tools.write_file", return_value="Success") as mock_write_file:
+
+        callback_update = {
+            "callback_query": {
+                "id": "query456",
+                "data": "approve",
+                "message": {
+                    "chat": {"id": 777},
+                    "message_id": 333,
+                    "text": "Previous prompt text"
+                }
+            }
+        }
+
+        adapter.handle_update(callback_update)
+
+        # Verify tool was executed
+        mock_write_file.assert_called_once_with("a.txt", "hello")
+
+        # Verify editMessageText was called to clear buttons
+        mock_api_call.assert_any_call("editMessageText", {
+            "chat_id": 777,
+            "message_id": 333,
+            "text": "Previous prompt text\n\nDecision: **Approved**"
+        })
+        # Verify final message sent
+        mock_api_call.assert_any_call("sendMessage", {
+            "chat_id": 777,
+            "text": "Write completed."
         })
 
 
@@ -140,9 +198,9 @@ def test_telegram_adapter_poll_updates():
     
     with patch.object(adapter, "_api_call", return_value=mock_updates_response) as mock_api_call, \
          patch.object(adapter, "handle_update") as mock_handle_update:
-         
-         adapter.poll()
-         
-         # Verify offset updated to last update_id + 1
-         assert adapter.offset == 451
-         mock_handle_update.assert_called_once_with(mock_updates_response["result"][0])
+
+        adapter.poll()
+
+        # Verify offset updated to last update_id + 1
+        assert adapter.offset == 451
+        mock_handle_update.assert_called_once_with(mock_updates_response["result"][0])
