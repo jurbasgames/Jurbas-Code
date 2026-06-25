@@ -38,7 +38,7 @@ def load_claude_code_token() -> str | None:
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"Aviso: nao foi possivel ler {creds_path}: {exc}", file=sys.stderr)
+        print(f"Warning: could not read {creds_path}: {exc}", file=sys.stderr)
         return None
     oauth = data.get("claudeAiOauth") or {}
     token = oauth.get("accessToken")
@@ -46,7 +46,7 @@ def load_claude_code_token() -> str | None:
         return None
     expires_at = oauth.get("expiresAt")
     if isinstance(expires_at, (int, float)) and expires_at / 1000 < time.time():
-        print("Aviso: o token do Claude Code em ~/.claude parece expirado. Rode `claude` para renovar a sessao.", file=sys.stderr)
+        print("Warning: Claude Code token in ~/.claude appears expired. Run `claude` to renew the session.", file=sys.stderr)
     return token
 
 def resolve_claude_token() -> str | None:

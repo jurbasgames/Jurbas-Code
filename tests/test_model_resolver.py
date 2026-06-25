@@ -3,7 +3,6 @@ from unittest.mock import patch
 
 import pytest
 
-import jurbas.providers as jurbas_providers
 import jurbas_code.providers as jurbas_code_providers
 
 
@@ -26,7 +25,7 @@ class FakeClient:
         )
 
 
-@pytest.mark.parametrize("providers", [jurbas_providers, jurbas_code_providers])
+@pytest.mark.parametrize("providers", [jurbas_code_providers])
 @pytest.mark.parametrize(
     ("provider", "env_var"),
     [("claude", "CLAUDE_MODEL"), ("deepseek", "DEEPSEEK_MODEL")],
@@ -42,7 +41,7 @@ def test_provider_model_env_wins_over_llm_model(providers, provider, env_var):
         assert providers.resolve_provider_model(provider, client) == "provider-specific-model"
 
 
-@pytest.mark.parametrize("providers", [jurbas_providers, jurbas_code_providers])
+@pytest.mark.parametrize("providers", [jurbas_code_providers])
 def test_llm_model_used_when_provider_env_is_missing(providers):
     client = FakeClient(["listed-model"])
 
@@ -50,7 +49,7 @@ def test_llm_model_used_when_provider_env_is_missing(providers):
         assert providers.resolve_provider_model("claude", client) == "generic-model"
 
 
-@pytest.mark.parametrize("providers", [jurbas_providers, jurbas_code_providers])
+@pytest.mark.parametrize("providers", [jurbas_code_providers])
 @pytest.mark.parametrize("provider", ["claude", "deepseek"])
 def test_model_list_success_uses_listed_model(providers, provider):
     client = FakeClient(["listed-model"])
@@ -59,7 +58,7 @@ def test_model_list_success_uses_listed_model(providers, provider):
         assert providers.resolve_provider_model(provider, client) == "listed-model"
 
 
-@pytest.mark.parametrize("providers", [jurbas_providers, jurbas_code_providers])
+@pytest.mark.parametrize("providers", [jurbas_code_providers])
 @pytest.mark.parametrize(
     ("provider", "default_name"),
     [

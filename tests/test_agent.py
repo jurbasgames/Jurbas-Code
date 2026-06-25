@@ -67,7 +67,7 @@ def test_agent_tool_call_roundtrip(mock_client):
 
     mock_client.chat.completions.create.side_effect = [mock_response_1, mock_response_2]
 
-    with patch("jurbas_code.agent.read_file", return_value="file content"):
+    with patch("jurbas_code.tools.read_file", return_value="file content"):
         on_tool_result = MagicMock()
         agent.chat("Read test.txt", on_tool_result=on_tool_result)
 
@@ -102,7 +102,7 @@ def test_agent_max_tool_steps(mock_client):
     mock_client.chat.completions.create.return_value = mock_response
 
     on_ai_reply = MagicMock()
-    with patch("jurbas_code.agent.read_file", return_value="content"):
+    with patch("jurbas_code.tools.read_file", return_value="content"):
         agent.chat("Keep reading", on_ai_reply=on_ai_reply)
 
     on_ai_reply.assert_called_once_with("stopped after reaching the max of 1 tool steps.")
