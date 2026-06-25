@@ -36,6 +36,12 @@ class Agent:
 
     def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
         if user_input:
+            if user_input.startswith("/"):
+                from jurbas_code.commands import handle_command
+                result = handle_command(self, user_input)
+                if on_ai_reply:
+                    on_ai_reply(result)
+                return
             self.messages.append({"role": "user", "content": user_input})
         model = resolve_provider_model(self.provider, self.client)
 
