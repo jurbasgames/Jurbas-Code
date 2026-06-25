@@ -111,6 +111,11 @@ def main(args=None):
         version=f"Jurbas-Code v{__version__}",
         help="Show the program version and exit."
     )
+    parser.add_argument(
+        "--telegram",
+        action="store_true",
+        help="Run Jurbas-Code as a Telegram Bot gateway."
+    )
     parsed_args = parser.parse_args([] if args is None else args)
 
     if parsed_args.clear_history:
@@ -135,6 +140,25 @@ def main(args=None):
         client = get_client(provider)
     except (ValueError, RuntimeError) as e:
         sys.exit(str(e))
+
+    if parsed_args.telegram:
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        if not token:
+            print("Error: TELEGRAM_BOT_TOKEN environment variable is not set.")
+            sys.exit(1)
+
+        from jurbas_code.telegram_adapter import TelegramAdapter
+
+        def agent_factory():
+            a = Agent(client, provider)
+            # Starting each telegram conversation with the system prompt, but not loading the local history.json
+            # to prevent multiple chat threads from bleeding into each other.
+            a.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            return a
+
+        adapter = TelegramAdapter(token, agent_factory)
+        adapter.run_loop()
+        return
 
     agent = Agent(client, provider)
     agent.messages = load_history()
@@ -164,5 +188,7 @@ def main(args=None):
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
         main(sys.argv[2:])
+    elif len(sys.argv) > 1 and sys.argv[1] == "--telegram":
+        main(sys.argv[1:])
     else:
         main(sys.argv[1:])
