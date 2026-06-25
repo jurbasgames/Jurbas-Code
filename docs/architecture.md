@@ -4,24 +4,13 @@ This document describes the modular architecture of Jurbas-Code. The project is 
 
 ## Module Diagram
 
-```text
-                  +-------------------+
-                  |      main.py      |  <-- CLI Entrypoint
-                  +---------+---------+
-                            |
-                 +----------v----------+
-                 |  jurbas_code.agent  |  <-- Core Loop & Logic
-                 +----+-----------+----+
-                      |           |
-       +--------------v-+       +-v--------------+
-       | jurbas_code.   |       | jurbas_code.   |
-       | providers      |       | tools          |
-       +----------------+       +-------+--------+
-                                        |
-       +----------------+       +-------v--------+
-       | jurbas_code.   |       | jurbas_code.   |
-       | prompts        |       | security       |
-       +----------------+       +----------------+
+```mermaid
+graph TD
+    A[main.py<br>CLI Entrypoint] --> B(jurbas_code.agent<br>Core Loop & Logic)
+    B --> C(jurbas_code.providers)
+    B --> D(jurbas_code.tools)
+    D --> E(jurbas_code.security)
+    B --> F(jurbas_code.prompts)
 ```
 
 ## Module Boundaries
