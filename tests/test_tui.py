@@ -3,6 +3,9 @@ import sys
 from unittest.mock import patch, MagicMock
 import pytest
 
+# Skip all tests in this file if textual is not installed
+textual = pytest.importorskip("textual")
+
 from main import main
 
 def test_tui_flag_checks_imports():
