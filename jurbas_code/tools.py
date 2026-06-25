@@ -1,7 +1,6 @@
 """Filesystem, bash execution, and web search tools for the agent."""
 
 import os
-import shutil
 import subprocess
 
 from jurbas_code.security import (
