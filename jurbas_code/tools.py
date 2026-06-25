@@ -108,6 +108,54 @@ def write_file(file_path: str, content: str) -> str:
         return f"Error writing file: {e}"
 
 
+class ShellHealth:
+    def __init__(self):
+        self.consecutive_failures = 0
+        self.last_signal = ""
+
+    def record_result(self, command: str, exit_code: int, stderr: str) -> str | None:
+        """Returns diagnostic message if broken, None otherwise."""
+        if exit_code == 0:
+            self.reset()
+            return None
+
+        stderr_lower = (stderr or "").lower()
+        known_signals = [
+            "não tem distribuições instaladas",
+            "no distributions installed",
+            "command not found",
+            "not recognized",
+        ]
+
+        matched = False
+        for signal in known_signals:
+            if signal in stderr_lower:
+                self.consecutive_failures += 1
+                self.last_signal = signal
+                matched = True
+                break
+
+        if not matched:
+            self.reset()
+            return None
+
+        if self.is_broken():
+            return f"\n[Diagnostic] Shell might be broken: {self.consecutive_failures} consecutive known failures. Last signal: '{self.last_signal}'"
+
+        return None
+
+    def reset(self) -> None:
+        self.consecutive_failures = 0
+        self.last_signal = ""
+
+    def is_broken(self) -> bool:
+        return self.consecutive_failures >= 3
+
+
+# Global ShellHealth manager instance to track state correctly
+shell_health = ShellHealth()
+
+
 def run_bash(command: str) -> str:
     from jurbas_code.security import _SHELL_EXECUTABLE
     if not isinstance(command, str):
@@ -128,6 +176,9 @@ def run_bash(command: str) -> str:
             result = subprocess.run([_SHELL_EXECUTABLE, "-c", command], shell=False, **kwargs)
         else:
             result = subprocess.run(command, shell=True, **kwargs)
+
+        diag = shell_health.record_result(command, result.returncode, result.stderr)
+
         output_parts = []
         if result.stdout.strip():
             output_parts.append(result.stdout.rstrip("\n"))
@@ -135,12 +186,16 @@ def run_bash(command: str) -> str:
             output_parts.append(f"[stderr]\n{result.stderr.rstrip()}")
         if not output_parts:
             if result.returncode == 0:
-                return "(command completed with no output)"
+                output = "(command completed with no output)"
             else:
-                return f"Error: command failed (exit code {result.returncode}) with no output."
-        output = "\n".join(output_parts)
-        if result.returncode != 0:
-            return f"Command exited with code {result.returncode}.\n{output}"
+                output = f"Error: command failed (exit code {result.returncode}) with no output."
+        else:
+            output = "\n".join(output_parts)
+            if result.returncode != 0:
+                output = f"Command exited with code {result.returncode}.\n{output}"
+
+        if diag:
+            output += diag
         return output
     except FileNotFoundError:
         from jurbas_code.security import _IS_WINDOWS
