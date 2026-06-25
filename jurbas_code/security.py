@@ -258,7 +258,7 @@ def confirm_action(name: str, args) -> bool:
     else:
         print(f"      {name}: {args}")
     try:
-        answer = input("  Approve? [Y/n] ").strip().lower()
+        answer = input("  Approve? [y/N] ").strip().lower()
     except EOFError:
-        answer = ""
-    return answer in ("y", "yes", "")
+        answer = "n"
+    return answer in ("y", "yes")
