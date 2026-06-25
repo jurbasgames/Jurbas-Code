@@ -91,7 +91,7 @@ def get_client(provider_name: str) -> Any:
     elif provider == "claude":
         return get_claude_client()
     else:
-        raise ValueError(f"Provider desconhecido: {provider}. Use 'claude' ou 'deepseek'.")
+        raise ValueError(f"Unknown provider: {provider}. Use 'claude' or 'deepseek'.")
 
 def _listed_model_ids(client: Any) -> list[str]:
     models = getattr(client, "models", None)
