@@ -17,12 +17,17 @@ from jurbas_code.security import (
 
 DDGS = None
 try:
-    from duckduckgo_search import DDGS as _DDGS
+    from ddgs import DDGS as _DDGS
     DDGS = _DDGS
     HAS_WEB_SEARCH = True
 except ImportError:
-    HAS_WEB_SEARCH = False
-
+    try:
+        from duckduckgo_search import DDGS as _DDGS
+        DDGS = _DDGS
+        HAS_WEB_SEARCH = True
+    except ImportError:
+        DDGS = None
+        HAS_WEB_SEARCH = False
 BASH_TIMEOUT = 300
 
 
@@ -158,7 +163,7 @@ def web_search(query: str, max_results: int = 5) -> str:
     if not HAS_WEB_SEARCH or DDGS is None:
         return (
             "Error: 'duckduckgo_search' library is not installed. "
-            "Install it with: uv add duckduckgo-search  (or pip install duckduckgo-search)"
+            "Install it with: uv add ddgs  (or pip install ddgs)"
         )
     if not isinstance(query, str) or not query.strip():
         return "Error: query must be a non-empty string."

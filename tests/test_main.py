@@ -592,7 +592,7 @@ class TestWebSearch:
         with patch('jurbas_code.tools.HAS_WEB_SEARCH', False):
             result = main.web_search("test query")
             assert "not installed" in result
-            assert "duckduckgo-search" in result
+            assert "ddgs" in result
 
     def test_empty_query(self):
         """Empty or whitespace query should be rejected."""
