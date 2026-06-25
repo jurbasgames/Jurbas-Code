@@ -24,6 +24,8 @@ from jurbas_code.providers import (
 )
 
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
+from jurbas_code.audit import audit_logger
+from jurbas_code.log_config import logger
 
 class Agent:
     def __init__(self, client, provider, system_prompt=SYSTEM_PROMPT, tools=TOOLS_SCHEMA, max_tool_steps=MAX_TOOL_STEPS):
@@ -103,6 +105,8 @@ class Agent:
                                 role = delta.role
                             reasoning = getattr(delta, "reasoning_content", None)
                             if reasoning:
+                                if not reasoning_content:
+                                    logger.debug("Starting reasoning stream.")
                                 if not printed_ai_prefix:
                                     print("AI: ", end="", flush=True)
                                     printed_ai_prefix = True
@@ -137,6 +141,7 @@ class Agent:
                                     if getattr(tc_chunk.function, "arguments", None):
                                         tool_calls[index]["function"]["arguments"] += tc_chunk.function.arguments
                     except Exception as e:
+                        logger.error(f"Stream interrupted: {e}")
                         print(f"\n[Stream interrupted: {e}]")
                         break
 
@@ -180,6 +185,11 @@ class Agent:
                         self.session_tokens["total"] += t_tokens
                         if on_token_update:
                             on_token_update(p_tokens, c_tokens, t_tokens, self.session_tokens)
+                        audit_logger.log_action("api_call", {
+                            "provider": self.provider,
+                            "model": model,
+                            "tokens": t_tokens
+                        })
 
                     assistant_msg_obj = response.choices[0].message
                     assistant_msg_dict = assistant_msg_obj.model_dump(exclude_none=True)
@@ -210,15 +220,19 @@ class Agent:
                         tools=convert_to_anthropic_tools(self.tools),
                     )
                 except anthropic.AuthenticationError as e:
+                    logger.error(f"Anthropic Authentication Error: {e}")
                     print(f"AI: Authentication Error: {e}")
                     sys.exit(1)
                 except anthropic.RateLimitError as e:
+                    logger.warning(f"Anthropic Rate Limit Error: {e}")
                     print(f"AI: Rate Limit Error: {e}\n")
                     break
                 except anthropic.APITimeoutError as e:
+                    logger.warning(f"Anthropic Timeout Error: {e}")
                     print(f"AI: Timeout Error: {e}\n")
                     break
                 except anthropic.APIError as e:
+                    logger.error(f"Anthropic API Error: {e}")
                     print(f"AI: API Error: {e}")
                     while self.messages and self.messages[-1].get("role") != "user":
                         self.messages.pop()
@@ -226,6 +240,7 @@ class Agent:
                         self.messages.pop()
                     break
                 except Exception as e:
+                    logger.error(f"Anthropic Unexpected Error: {e}")
                     print(f"AI: Unexpected Error: {e}")
                     break
 
@@ -239,6 +254,11 @@ class Agent:
                     self.session_tokens["total"] += t_tokens
                     if on_token_update:
                         on_token_update(p_tokens, c_tokens, t_tokens, self.session_tokens)
+                    audit_logger.log_action("api_call", {
+                        "provider": self.provider,
+                        "model": model,
+                        "tokens": t_tokens
+                    })
 
                 assistant_text = ""
                 tool_calls = []
@@ -274,6 +294,7 @@ class Agent:
                     if not isinstance(args, dict):
                         raise ValueError("tool arguments must be a JSON object")
                 except (json.JSONDecodeError, ValueError) as e:
+                    logger.error(f"Invalid JSON arguments for tool '{name}': {e}")
                     if on_tool_call:
                         on_tool_call(name, raw_args, error=str(e))
                     self.messages.append({
@@ -296,8 +317,10 @@ class Agent:
                     try:
                         result = handler(args)
                     except KeyError as e:
+                        logger.error(f"Missing required argument {e} for tool '{name}'")
                         result = f"Error: missing required argument {e} for tool '{name}'."
                     except Exception as e:
+                        logger.error(f"Error executing '{name}': {e}")
                         result = f"Error executing '{name}': {e}"
 
                 if on_tool_result:
