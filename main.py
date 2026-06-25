@@ -116,6 +116,11 @@ def main(args=None):
         action="store_true",
         help="Run Jurbas-Code as a Telegram Bot gateway."
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Run Jurbas-Code using the Textual terminal UI."
+    )
     parsed_args = parser.parse_args([] if args is None else args)
 
     if parsed_args.clear_history:
@@ -162,6 +167,19 @@ def main(args=None):
 
     agent = Agent(client, provider)
     agent.messages = load_history()
+
+    if parsed_args.tui or os.environ.get("JURBAS_TUI") == "1":
+        try:
+            from jurbas_code.tui.app import JurbasTUI
+        except ImportError:
+            print("Error: The 'tui' optional dependencies are not installed.")
+            print("Please install them using: uv pip install -e .[tui]")
+            sys.exit(1)
+
+        app = JurbasTUI(agent=agent)
+        app.run()
+        save_history(agent.messages)
+        return
 
     print(f"Jurbas-Code v{__version__}")
 
