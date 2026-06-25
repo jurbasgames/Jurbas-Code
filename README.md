@@ -91,7 +91,7 @@ uv run --extra dev pytest -q
 Useful focused checks:
 
 ```bash
-uv run --extra dev python -m py_compile main.py jurbas/*.py jurbas_code/*.py tests/*.py
+uv run --extra dev python -m py_compile main.py jurbas_code/*.py tests/*.py
 uv run --extra dev pytest -q tests/test_claude_code_headers.py
 ```
 

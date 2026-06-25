@@ -104,7 +104,7 @@ def safe_path(file_path: str) -> str:
     try:
         allowed_norm = os.path.normcase(ALLOWED_BASE)
         full_norm = os.path.normcase(full)
-        if os.path.commonpath([allowed_norm, full_norm]) != allowed_norm:
+        if os.path.normcase(os.path.commonpath([allowed_norm, full_norm])) != allowed_norm:
             raise PermissionError(f"Path not allowed: {file_path}")
     except ValueError:
         raise PermissionError(f"Path not allowed: {file_path}")
@@ -258,7 +258,7 @@ def confirm_action(name: str, args) -> bool:
     else:
         print(f"      {name}: {args}")
     try:
-        answer = input("  Approve? [Y/n] ").strip().lower()
+        answer = input("  Approve? [y/N] ").strip().lower()
     except EOFError:
-        answer = ""
-    return answer in ("y", "yes", "")
+        answer = "n"
+    return answer in ("y", "yes")
