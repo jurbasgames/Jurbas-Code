@@ -12,9 +12,9 @@ Jurbas-Code is an autonomous Python CLI coding agent with streaming support, sel
 ### Quick Install
 
 ```bash
-uv add jurbas-code
-# or
-pip install jurbas-code
+git clone https://github.com/jurbasgames/Jurbas-Code.git
+cd Jurbas-Code
+uv sync --all-extras
 ```
 
 ### Quick Start
