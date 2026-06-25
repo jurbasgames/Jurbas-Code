@@ -4,7 +4,7 @@ This document outlines the standard development process, testing procedures, CI 
 
 ## Setting Up the Dev Environment
 
-Jurbas-Code uses `uv` for dependency management and requires Python 3.14.
+Jurbas-Code uses `uv` for dependency management and requires Python >=3.13.
 
 ```bash
 # Clone the repository
@@ -12,7 +12,7 @@ git clone https://github.com/jurbasgames/Jurbas-Code.git
 cd Jurbas-Code
 
 # Sync all dependencies including development extras
-uv sync --extra dev --locked --python 3.14
+uv sync --extra dev --locked
 ```
 
 ## Running Tests
@@ -21,10 +21,10 @@ All testing is done via `pytest` and basic python compilation checks to ensure s
 
 ```bash
 # Check syntax
-uv run --extra dev --locked --python 3.14 python -m py_compile main.py jurbas_code/*.py tests/*.py
+uv run --extra dev --locked python -m py_compile main.py jurbas_code/*.py tests/*.py
 
 # Run the test suite
-uv run --extra dev --locked --python 3.14 pytest -q -v
+uv run --extra dev --locked pytest -q -v
 ```
 
 Before opening a PR, always run `git diff --check` to catch trailing whitespace or syntax issues.
