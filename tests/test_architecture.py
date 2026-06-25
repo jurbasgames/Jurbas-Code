@@ -11,6 +11,7 @@ from jurbas_code import security, tools, prompts, providers, agent, tool_schemas
     "jurbas_code.tools",
     "jurbas_code.prompts",
     "jurbas_code.tool_schemas",
+    "jurbas_code.config",
     "jurbas_code.providers",
     "jurbas_code.agent",
     "main",

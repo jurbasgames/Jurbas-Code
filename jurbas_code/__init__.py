@@ -34,6 +34,7 @@ _LAZY_EXPORTS = {
     "confirm_action": ("jurbas_code.security", "confirm_action"),
     "SYSTEM_PROMPT": ("jurbas_code.prompts", "SYSTEM_PROMPT"),
     "tools_schema": ("jurbas_code.tool_schemas", "tools"),
+    "Config": ("jurbas_code.config", "Config"),
     "TOOL_HANDLERS": ("jurbas_code.tools", "TOOL_HANDLERS"),
     "read_file": ("jurbas_code.tools", "read_file"),
     "list_directory": ("jurbas_code.tools", "list_directory"),
