@@ -37,7 +37,7 @@ If the correct minimal fix is unclear, stop and explain the blocker. Do not impr
 
 - `main.py` is the CLI/compatibility entrypoint. Keep it thin.
 - Core behavior belongs in packages, not in one-off startup code.
-- When touching duplicated paths under `jurbas/` and `jurbas_code/`, inspect both. Do not fix one copy while leaving the other broken.
+- Runtime code lives in the single `jurbas_code/` package (`main.py` is the thin CLI entrypoint). Do not reintroduce a parallel `jurbas/` package or duplicate provider/agent/tool logic across modules.
 - Provider-specific request/response conversion belongs in adapter/provider code, not scattered through the CLI.
 - File and shell tools must preserve sandbox and confirmation behavior.
 - Provider auth must not silently switch billing modes. The Claude provider is intended to use Claude Code OAuth/subscription auth, not Anthropic API-key billing.
@@ -49,7 +49,7 @@ Run the smallest relevant targeted checks plus the full project checks when poss
 
 ```bash
 git diff --check
-uv run --extra dev python -m py_compile main.py jurbas/*.py jurbas_code/*.py tests/*.py
+uv run --extra dev python -m py_compile main.py jurbas_code/*.py tests/*.py
 uv run --extra dev pytest -q
 ```
 

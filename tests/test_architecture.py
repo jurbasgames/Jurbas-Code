@@ -1,16 +1,19 @@
 import importlib
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-from jurbas import security, tools, prompts, adapters, providers, agent
+from jurbas_code import security, tools, prompts, providers, agent, tool_schemas
 
 @pytest.mark.parametrize("module_name", [
-    "jurbas.security",
-    "jurbas.tools",
-    "jurbas.prompts",
-    "jurbas.adapters",
-    "jurbas.providers",
-    "jurbas.agent",
+    "jurbas_code.security",
+    "jurbas_code.tools",
+    "jurbas_code.prompts",
+    "jurbas_code.tool_schemas",
+    "jurbas_code.config",
+    "jurbas_code.providers",
+    "jurbas_code.agent",
     "main",
 ])
 def test_modules_importable(module_name):
@@ -22,7 +25,7 @@ def test_modules_importable(module_name):
 
 def test_tool_names_match_handlers():
     """Ensure every tool defined in the schema has a corresponding handler."""
-    schema_tool_names = {t["function"]["name"] for t in tools.tools}
+    schema_tool_names = {t["function"]["name"] for t in tool_schemas.tools}
     handler_names = set(tools.TOOL_HANDLERS.keys())
 
     assert schema_tool_names == handler_names, (
@@ -30,6 +33,12 @@ def test_tool_names_match_handlers():
         f"Schemas: {schema_tool_names}\n"
         f"Handlers: {handler_names}"
     )
+
+
+def test_agent_uses_canonical_tool_dispatcher():
+    """Agent dispatch must use the canonical handler map from jurbas_code.tools."""
+    assert agent.TOOL_HANDLERS is tools.TOOL_HANDLERS
+
 
 def test_main_as_entrypoint():
     """Verify main.py remains importable and has a main function."""
@@ -40,8 +49,20 @@ def test_main_as_entrypoint():
 def test_provider_no_immediate_network():
     """Verify that importing providers doesn't attempt network or key validation immediately."""
     # This is partially covered by test_modules_importable, but we can be explicit
-    import jurbas.providers as providers
+    import jurbas_code.providers as providers
     assert hasattr(providers, 'get_claude_client')
+
+
+def test_provider_import_does_not_import_security_subprocess():
+    """Importing provider-only code must not trigger shell/security import side effects."""
+    repo_root = Path(__file__).resolve().parents[1]
+    code = (
+        "import sys; "
+        "import jurbas_code.providers; "
+        "raise SystemExit(1 if 'jurbas_code.security' in sys.modules else 0)"
+    )
+    result = subprocess.run([sys.executable, "-c", code], cwd=repo_root)
+    assert result.returncode == 0
 
 
 def test_no_legacy_claude_3_7_model_hardcode():

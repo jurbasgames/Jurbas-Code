@@ -38,7 +38,7 @@ def load_claude_code_token() -> str | None:
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"Aviso: nao foi possivel ler {creds_path}: {exc}", file=sys.stderr)
+        print(f"Warning: could not read {creds_path}: {exc}", file=sys.stderr)
         return None
     oauth = data.get("claudeAiOauth") or {}
     token = oauth.get("accessToken")
@@ -46,7 +46,7 @@ def load_claude_code_token() -> str | None:
         return None
     expires_at = oauth.get("expiresAt")
     if isinstance(expires_at, (int, float)) and expires_at / 1000 < time.time():
-        print("Aviso: o token do Claude Code em ~/.claude parece expirado. Rode `claude` para renovar a sessao.", file=sys.stderr)
+        print("Warning: Claude Code token in ~/.claude appears expired. Run `claude` to renew the session.", file=sys.stderr)
     return token
 
 def resolve_claude_token() -> str | None:
@@ -91,7 +91,52 @@ def get_client(provider_name: str) -> Any:
     elif provider == "claude":
         return get_claude_client()
     else:
-        raise ValueError(f"Provider desconhecido: {provider}. Use 'claude' ou 'deepseek'.")
+        raise ValueError(f"Unknown provider: {provider}. Use 'claude' or 'deepseek'.")
+
+def _listed_model_ids(client: Any) -> list[str]:
+    models = getattr(client, "models", None)
+    list_models = getattr(models, "list", None)
+    if not callable(list_models):
+        return []
+    response = list_models()
+    items = getattr(response, "data", response)
+    model_ids = []
+    for item in items:
+        model_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        if isinstance(model_id, str) and model_id:
+            model_ids.append(model_id)
+    return model_ids
+
+def _env_model(provider: str) -> str | None:
+    env_var = {
+        "claude": "CLAUDE_MODEL",
+        "deepseek": "DEEPSEEK_MODEL",
+    }.get(provider)
+    if env_var:
+        model = os.environ.get(env_var, "").strip()
+        if model:
+            return model
+    model = os.environ.get("LLM_MODEL", "").strip()
+    return model or None
+
+def resolve_provider_model(provider_name: str, client: Any) -> str:
+    provider = provider_name.lower()
+    env_model = _env_model(provider)
+    if env_model:
+        return env_model
+
+    defaults = {
+        "claude": DEFAULT_CLAUDE_MODEL,
+        "deepseek": DEFAULT_DEEPSEEK_MODEL,
+    }
+    default_model = defaults[provider]
+    try:
+        model_ids = _listed_model_ids(client)
+    except Exception:
+        return default_model
+    if default_model in model_ids:
+        return default_model
+    return model_ids[0] if model_ids else default_model
 
 def _listed_model_ids(client: Any) -> list[str]:
     models = getattr(client, "models", None)
