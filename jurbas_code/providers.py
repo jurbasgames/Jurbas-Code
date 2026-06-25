@@ -101,10 +101,13 @@ def _listed_model_ids(client: Any) -> list[str]:
     response = list_models()
     items = getattr(response, "data", response)
     model_ids = []
-    for item in items:
-        model_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
-        if isinstance(model_id, str) and model_id:
-            model_ids.append(model_id)
+    try:
+        for item in items:
+            model_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+            if isinstance(model_id, str) and model_id:
+                model_ids.append(model_id)
+    except TypeError:
+        pass
     return model_ids
 
 def _env_model(provider: str) -> str | None:
