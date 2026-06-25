@@ -5,7 +5,7 @@ from unittest import mock
 from jurbas_code import providers
 
 def test_get_client_unknown_provider():
-    with pytest.raises(ValueError, match="Provider desconhecido: unknown"):
+    with pytest.raises(ValueError, match="Unknown provider: unknown"):
         providers.get_client("unknown")
 
 def test_get_claude_client_no_credentials():
