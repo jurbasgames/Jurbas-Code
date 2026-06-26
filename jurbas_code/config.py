@@ -1,7 +1,7 @@
 import os
 import json
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, List
 
 @dataclass
 class Config:
@@ -12,6 +12,7 @@ class Config:
     index_paths: Dict[str, str] = field(default_factory=lambda: {
         "default": ".jurbas_index"
     })
+    telegram_allowed_users: List[int] = field(default_factory=list)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -34,6 +35,15 @@ class Config:
                 if isinstance(overrides, dict):
                     config.index_paths.update(overrides)
             except json.JSONDecodeError:
+                pass
+
+        telegram_allowed_users_env = os.environ.get("JURBAS_TELEGRAM_ALLOWED_USERS")
+        if telegram_allowed_users_env:
+            try:
+                allowed = json.loads(telegram_allowed_users_env)
+                if isinstance(allowed, list):
+                    config.telegram_allowed_users = [int(u) for u in allowed]
+            except (json.JSONDecodeError, ValueError, TypeError):
                 pass
 
         return config
