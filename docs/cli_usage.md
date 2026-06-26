@@ -45,18 +45,6 @@ The agent has access to a set of internal tools it can invoke autonomously to ex
 - `run_bash`: Executes a shell command in the local environment. By design, mutative commands require user confirmation.
 - `web_search`: Searches the internet for information (useful for fetching up-to-date documentation or solving errors).
 
-## Slash Commands
-
-Within the interactive REPL, you can use the following commands to control the session:
-
-- `/help`: Show help information.
-- `/model`: View or change the current model.
-- `/clear`: Clear the screen or context.
-- `/status`: Show the current session status.
-- `/version`: Show the Jurbas-Code version.
-
-*(Note: Slash commands are processed via standard input intercepts during interactive mode as per project specifications.)*
-
 ## Examples
 
 **1. Starting a standard session (Claude provider):**

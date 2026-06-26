@@ -55,6 +55,8 @@ Jurbas-Code dynamically determines the model to use based on a strict resolution
 
 ## The `/model` Command
 
+*(Note: The `/model` command functionality depends on PR #103 being merged).*
+
 During an interactive session, you can view the current model or dynamically switch to a different model using the `/model` command.
 
 ```text
