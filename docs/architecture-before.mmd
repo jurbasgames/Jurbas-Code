@@ -2,7 +2,6 @@ flowchart TB
     subgraph User["👤 Usuário"]
         direction LR
         U1[Terminal]
-        U2[Navegador/Desktop]
         U3[Telegram App]
     end
 
@@ -35,7 +34,6 @@ flowchart TB
 
     U1 --> CLI
     U1 --> TUI
-    U2 --> TUI
     U3 --> TG
 
     CLI --> AGENT_CHAT
