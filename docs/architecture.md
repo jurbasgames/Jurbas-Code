@@ -2,16 +2,24 @@
 
 This document describes the modular architecture of Jurbas-Code. The project is strictly organized into a single `jurbas_code/` package. The legacy `jurbas/` namespace is deprecated and must not be reintroduced.
 
-## Module Diagram
+## Architecture Diagrams
 
-```mermaid
-graph TD
-    A[main.py<br>CLI Entrypoint] --> B(jurbas_code.agent<br>Core Loop & Logic)
-    B --> C(jurbas_code.providers)
-    B --> D(jurbas_code.tools)
-    D --> E(jurbas_code.security)
-    B --> F(jurbas_code.prompts)
-```
+Two diagrams illustrate the architecture evolution:
+
+| Version | Diagram |
+|---------|---------|
+| **BEFORE** (current) | `architecture-before.png` — CLI + TUI + Telegram directly coupled to Agent |
+| **AFTER** (planned) | `architecture-after.png` — adds REST API + Interface Protocol + Session Manager |
+
+### BEFORE — Current Architecture
+
+![Architecture Before](architecture-before.png)
+
+### AFTER — With REST API Interface
+
+![Architecture After](architecture-after.png)
+
+The key change is the introduction of a formal **Interface Protocol** (`AgentCallback`) that all adapters implement, enabling new interfaces (like the REST API) to be added without modifying the core agent loop. A **Session Manager** handles per-session state, essential for stateless HTTP access.
 
 ## Module Boundaries
 
