@@ -2,9 +2,11 @@
 
 This document describes the modular architecture of Jurbas-Code. The project is strictly organized into a single `jurbas_code/` package. The legacy `jurbas/` namespace is deprecated and must not be reintroduced.
 
-## Diagrama
+## Architecture Diagram
 
-![Arquitetura](architecture.png)
+![Architecture](architecture.png)
+
+> Components marked in red (🆕) are planned: REST API Server, Interface Protocol (AgentCallback), and Session Manager. They are not yet implemented — the diagram shows the target architecture for ongoing development.
 
 ## Module Boundaries
 

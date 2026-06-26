@@ -10,10 +10,10 @@ flowchart TB
         CLI["main.py<br/>Legacy CLI Loop"]
         TUI["jurbas_code/tui/app.py<br/>JurbasTUI (Textual)"]
         TG["jurbas_code/telegram_adapter.py<br/>TelegramAdapter"]
-        API["🆕 jurbas_code/api/<br/>REST API Server<br/>(FastAPI/Starlette)"]
+        API["🆕 jurbas_code/api/<br/>REST API Server"]
     end
 
-    subgraph IFACE_PROTOCOL["🔌 Interface Protocol"]
+    subgraph CONTRACTS["🔌 Interface Contracts"]
         PROTO["AgentCallback<br/>Protocol / ABC"]
     end
 
@@ -29,7 +29,7 @@ flowchart TB
         SEC["jurbas_code/security.py<br/>Path Validation + Confirmation"]
         PROMPTS["jurbas_code/prompts.py<br/>System Prompt"]
         CMDS["jurbas_code/commands.py<br/>Slash Commands"]
-        SESSION_MGR["🆕 Session Manager<br/>(state container per session)"]
+        SESSION_MGR["🆕 Session Manager"]
     end
 
     subgraph External["🌐 External Services"]
@@ -44,12 +44,17 @@ flowchart TB
     U2 --> API
     U3 --> TG
 
+    CLI -->|calls| AGENT_CHAT
+    TUI -->|calls| AGENT_CHAT
+    TG -->|calls| AGENT_CHAT
+    API -->|calls| AGENT_CHAT
+
     CLI -.->|implements| PROTO
     TUI -.->|implements| PROTO
     TG -.->|implements| PROTO
     API -.->|implements| PROTO
 
-    PROTO --> AGENT_CHAT
+    PROTO -.->|defines callbacks| AGENT_CHAT
 
     AGENT --> AGENT_CHAT
     AGENT_CHAT --> PROV
