@@ -21,8 +21,6 @@ from jurbas_code.providers import (
     convert_to_anthropic_tools,
     normalize_tool_call,
     resolve_provider_model,
-    _listed_model_ids,
-    get_client,
 )
 
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError

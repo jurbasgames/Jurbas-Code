@@ -47,13 +47,7 @@ def cmd_version(agent, args):
 
 def cmd_model(agent, args):
     """List available models or switch session model (/model <provider|model>)."""
-    from jurbas_code.providers import (
-        resolve_provider_model,
-        _listed_model_ids,
-        get_client,
-        DEFAULT_CLAUDE_MODEL,
-        DEFAULT_DEEPSEEK_MODEL,
-    )
+    from jurbas_code.providers import resolve_provider_model, _listed_model_ids, get_client
 
     current_model = agent.session_model or resolve_provider_model(agent.provider, agent.client)
 
@@ -67,45 +61,16 @@ def cmd_model(agent, args):
         return reply
 
     arg = args.strip()
-    arg_lower = arg.lower()
-    if arg_lower in ("claude", "deepseek"):
+    if arg in ("claude", "deepseek"):
         try:
-            temp_client = get_client(arg_lower)
+            temp_client = get_client(arg)
             models = _listed_model_ids(temp_client)
-            return f"Available models for '{arg_lower}': " + (", ".join(models) if models else "Unknown (API unavailable)")
+            return f"Available models for '{arg}': " + (", ".join(models) if models else "Unknown (API unavailable)")
         except Exception as e:
-            return f"Error fetching models for '{arg_lower}': {e}"
+            return f"Error fetching models for '{arg}': {e}"
 
-    # Determine target provider for the model
-    target_provider = None
-    if arg_lower.startswith("claude-") or arg_lower == DEFAULT_CLAUDE_MODEL.lower():
-        target_provider = "claude"
-    elif arg_lower.startswith("deepseek-") or arg_lower == DEFAULT_DEEPSEEK_MODEL.lower():
-        target_provider = "deepseek"
-    else:
-        # Check listing from both providers
-        for p in ("claude", "deepseek"):
-            try:
-                cl = get_client(p)
-                if arg in _listed_model_ids(cl):
-                    target_provider = p
-                    break
-            except Exception:
-                pass
-
-    if target_provider:
-        if target_provider != agent.provider:
-            try:
-                agent.client = get_client(target_provider)
-                agent.provider = target_provider
-            except Exception as e:
-                return f"Error initializing client for provider '{target_provider}': {e}"
-        agent.session_model = arg
-        return f"Session model switched to: {arg} (Provider: {target_provider})"
-    else:
-        # Fallback: keep current provider but switch model
-        agent.session_model = arg
-        return f"Session model switched to: {arg}"
+    agent.session_model = arg
+    return f"Session model switched to: {arg}"
 
 COMMAND_HANDLERS = {
     "/help": cmd_help,

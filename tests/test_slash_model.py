@@ -58,42 +58,8 @@ def test_model_switch_model(mock_client):
     agent.chat("/model deepseek-v4-pro", on_ai_reply=lambda r: replies.append(r))
 
     assert len(replies) == 1
-    assert "Session model switched to: deepseek-v4-pro (Provider: deepseek)" in replies[0]
+    assert "Session model switched to: deepseek-v4-pro" in replies[0]
     assert agent.session_model == "deepseek-v4-pro"
-    assert agent.provider == "deepseek"
-
-@patch("jurbas_code.providers.get_client")
-@patch("jurbas_code.providers._listed_model_ids")
-def test_model_provider_arg_case_insensitive(mock_listed, mock_get_client, mock_client):
-    temp_client = MagicMock()
-    mock_get_client.return_value = temp_client
-    mock_listed.return_value = ["claude-1", "claude-2"]
-
-    agent = Agent(mock_client, "deepseek")
-
-    replies = []
-    agent.chat("/model Claude", on_ai_reply=lambda r: replies.append(r))
-
-    assert len(replies) == 1
-    assert "Available models for 'claude': claude-1, claude-2" in replies[0]
-    mock_get_client.assert_called_once_with("claude")
-    assert agent.session_model is None
-
-@patch("jurbas_code.providers.get_client")
-def test_model_switch_provider_dynamically(mock_get_client, mock_client):
-    new_client = MagicMock()
-    mock_get_client.return_value = new_client
-    agent = Agent(mock_client, "deepseek")
-
-    replies = []
-    agent.chat("/model claude-3-5-sonnet", on_ai_reply=lambda r: replies.append(r))
-
-    assert len(replies) == 1
-    assert "Session model switched to: claude-3-5-sonnet (Provider: claude)" in replies[0]
-    assert agent.session_model == "claude-3-5-sonnet"
-    assert agent.provider == "claude"
-    assert agent.client == new_client
-    mock_get_client.assert_called_once_with("claude")
 
 @patch("jurbas_code.providers._listed_model_ids")
 @patch("jurbas_code.providers.resolve_provider_model")

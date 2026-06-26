@@ -168,6 +168,7 @@ class JurbasTUI(App):
             if getattr(self.agent, "session_model", None):
                 new_label = f"{self.agent.provider} ({self.agent.session_model})"
                 self.call_from_thread(setattr, status_bar, "provider_model", new_label)
+
             if not current_ai_msg:
                 def add_msg():
                     nonlocal current_ai_msg
