@@ -171,7 +171,16 @@ def main(args=None):
     agent = Agent(client, provider)
     agent.messages = load_history()
 
-    use_tui = not (parsed_args.no_tui or os.environ.get("JURBAS_TUI") == "0")
+    if parsed_args.no_tui:
+        use_tui = False
+    elif parsed_args.tui:
+        use_tui = True
+    elif os.environ.get("JURBAS_TUI") == "0":
+        use_tui = False
+    elif os.environ.get("JURBAS_TUI") == "1":
+        use_tui = True
+    else:
+        use_tui = True  # default: try TUI, fallback to CLI
     if use_tui:
         try:
             from jurbas_code.tui.app import JurbasTUI
