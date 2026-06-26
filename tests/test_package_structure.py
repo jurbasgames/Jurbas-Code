@@ -6,9 +6,9 @@ def test_exported_symbols():
     assert len(SYSTEM_PROMPT) > 0
 
     assert isinstance(tools, list)
-    assert len(tools) == 5
+    assert len(tools) == 7
 
-    expected_tool_names = {"read_file", "list_directory", "write_file", "run_bash", "web_search"}
+    expected_tool_names = {"read_file", "list_directory", "write_file", "run_bash", "web_search", "skills_list", "skills_get"}
     actual_tool_names = {t["function"]["name"] for t in tools}
 
     assert actual_tool_names == expected_tool_names

@@ -51,6 +51,8 @@ from jurbas_code.providers import (
     normalize_tool_call,
 )
 
+from jurbas_code.skills import skills_load
+
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 from jurbas_code.agent import Agent
 
@@ -111,6 +113,21 @@ def main(args=None):
         version=f"Jurbas-Code v{__version__}",
         help="Show the program version and exit."
     )
+    parser.add_argument(
+        "--telegram",
+        action="store_true",
+        help="Run Jurbas-Code as a Telegram Bot gateway."
+    )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Run Jurbas-Code using the Textual terminal UI (default)."
+    )
+    parser.add_argument(
+        "--no-tui",
+        action="store_true",
+        help="Force legacy CLI even if Textual TUI is available."
+    )
     parsed_args = parser.parse_args([] if args is None else args)
 
     if parsed_args.clear_history:
@@ -136,8 +153,56 @@ def main(args=None):
     except (ValueError, RuntimeError) as e:
         sys.exit(str(e))
 
+    if parsed_args.telegram:
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        if not token:
+            print("Error: TELEGRAM_BOT_TOKEN environment variable is not set.")
+            sys.exit(1)
+
+        from jurbas_code.telegram_adapter import TelegramAdapter
+        from jurbas_code.config import get_config
+
+        def agent_factory():
+            a = Agent(client, provider)
+            a.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            return a
+
+        skills_load()
+        config = get_config()
+        adapter = TelegramAdapter(
+            token,
+            agent_factory,
+            allowed_users=config.telegram_allowed_users
+        )
+        adapter.run_loop()
+        return
+
+    skills_load()
     agent = Agent(client, provider)
     agent.messages = load_history()
+
+    if parsed_args.no_tui:
+        use_tui = False
+    elif parsed_args.tui:
+        use_tui = True
+    elif os.environ.get("JURBAS_TUI") == "0":
+        use_tui = False
+    elif os.environ.get("JURBAS_TUI") == "1":
+        use_tui = True
+    else:
+        use_tui = True  # default: try TUI, fallback to CLI
+    if use_tui:
+        try:
+            from jurbas_code.tui.app import JurbasTUI
+            app = JurbasTUI(agent=agent)
+            app.run()
+            save_history(agent.messages)
+            return
+        except ImportError:
+            print("TUI dependencies not installed. Falling back to legacy CLI.")
+            print("Tip: uv pip install -e .[tui]")
+        except Exception as e:
+            print(f"TUI failed ({e}). Falling back to legacy CLI.")
 
     print(f"Jurbas-Code v{__version__}")
 
@@ -164,5 +229,7 @@ def main(args=None):
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
         main(sys.argv[2:])
+    elif len(sys.argv) > 1 and sys.argv[1] == "--telegram":
+        main(sys.argv[1:])
     else:
         main(sys.argv[1:])

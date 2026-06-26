@@ -42,6 +42,8 @@ _LAZY_EXPORTS = {
     "run_bash": ("jurbas_code.tools", "run_bash"),
     "web_search": ("jurbas_code.tools", "web_search"),
     "HAS_WEB_SEARCH": ("jurbas_code.tools", "HAS_WEB_SEARCH"),
+    "COMMAND_HANDLERS": ("jurbas_code.commands", "COMMAND_HANDLERS"),
+    "handle_command": ("jurbas_code.commands", "handle_command"),
 }
 
 

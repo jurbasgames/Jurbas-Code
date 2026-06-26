@@ -1,6 +1,7 @@
 """Filesystem, bash execution, and web search tools for the agent."""
 
 import os
+import shutil
 import subprocess
 
 from jurbas_code.security import (
@@ -13,6 +14,8 @@ from jurbas_code.security import (
     _requires_confirmation,
     confirm_action,
 )
+from jurbas_code.skills import skills_list, skills_get
+from jurbas_code.audit import audit_logger
 
 DDGS = None
 try:
@@ -48,7 +51,12 @@ def read_file(file_path: str) -> str:
         return f"Error: '{file_path}' is a directory, not a file."
     try:
         with open(full, "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read()
+            audit_logger.log_action("read_file", {
+                "file_path": file_path,
+                "size": len(content)
+            })
+            return content
     except Exception as e:
         return f"Error reading file: {e}"
 
@@ -100,10 +108,19 @@ def write_file(file_path: str, content: str) -> str:
         return f"Error: '{file_path}' is a directory."
     try:
         os.makedirs(os.path.dirname(full), exist_ok=True)
+        backup_note = ""
+        if os.path.exists(full):
+            backup = full + ".bak"
+            shutil.copy2(full, backup)
+            backup_note = f" (previous version backed up to '{os.path.basename(backup)}')"
         with open(full, "w", encoding="utf-8") as f:
             f.write(content)
         size = os.path.getsize(full)
-        return f"File '{file_path}' written successfully ({size} bytes)."
+        audit_logger.log_action("write_file", {
+            "file_path": file_path,
+            "size": size
+        })
+        return f"File '{file_path}' written successfully ({size} bytes).{backup_note}"
     except Exception as e:
         return f"Error writing file: {e}"
 
@@ -196,6 +213,10 @@ def run_bash(command: str) -> str:
 
         if diag:
             output += diag
+        audit_logger.log_action("run_bash", {
+            "command": command,
+            "exit_code": result.returncode
+        })
         return output
     except FileNotFoundError:
         from jurbas_code.security import _IS_WINDOWS
@@ -222,6 +243,11 @@ def web_search(query: str, max_results: int = 5) -> str:
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
+        audit_logger.log_action("web_search", {
+            "query": query,
+            "max_results": max_results,
+            "num_results": len(results)
+        })
     except Exception as e:
         return f"Error performing web search: {e}"
     if not results:
@@ -247,4 +273,6 @@ TOOL_HANDLERS = {
     "write_file": lambda args: write_file(args["file_path"], args["content"]),
     "run_bash": lambda args: run_bash(args["command"]),
     "web_search": lambda args: web_search(args["query"], args.get("max_results", 5)),
+    "skills_list": lambda args: skills_list(),
+    "skills_get": lambda args: skills_get(args["name"]),
 }
