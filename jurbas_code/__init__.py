@@ -2,6 +2,7 @@
 
 from importlib import import_module, metadata
 from pathlib import Path
+from typing import Any
 import tomllib
 
 
@@ -45,7 +46,7 @@ _LAZY_EXPORTS = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazily expose compatibility facade symbols without import side effects."""
     try:
         module_name, attr_name = _LAZY_EXPORTS[name]
