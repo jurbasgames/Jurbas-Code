@@ -51,6 +51,8 @@ from jurbas_code.providers import (
     normalize_tool_call,
 )
 
+from jurbas_code.skills import skills_load
+
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 from jurbas_code.agent import Agent
 
@@ -164,10 +166,12 @@ def main(args=None):
             a.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             return a
 
+        skills_load()
         adapter = TelegramAdapter(token, agent_factory)
         adapter.run_loop()
         return
 
+    skills_load()
     agent = Agent(client, provider)
     agent.messages = load_history()
 

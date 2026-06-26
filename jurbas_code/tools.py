@@ -14,6 +14,7 @@ from jurbas_code.security import (
     _requires_confirmation,
     confirm_action,
 )
+from jurbas_code.skills import skills_list, skills_get
 from jurbas_code.audit import audit_logger
 
 DDGS = None
@@ -272,4 +273,6 @@ TOOL_HANDLERS = {
     "write_file": lambda args: write_file(args["file_path"], args["content"]),
     "run_bash": lambda args: run_bash(args["command"]),
     "web_search": lambda args: web_search(args["query"], args.get("max_results", 5)),
+    "skills_list": lambda args: skills_list(),
+    "skills_get": lambda args: skills_get(args["name"]),
 }
