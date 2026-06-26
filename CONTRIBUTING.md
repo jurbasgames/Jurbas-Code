@@ -74,6 +74,7 @@ uv sync --all-extras
 ## 🛡️ Security
 
 - Every file operation uses paths validated by `safe_path()`, which resolves symlinks and enforces a boundary check against `ALLOWED_BASE`.
+- Existing files are automatically backed up with a `.bak` suffix before being overwritten.
 - Always respect the project sandbox (`ALLOWED_BASE`).
 
 > [!NOTE]

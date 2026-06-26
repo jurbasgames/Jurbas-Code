@@ -222,9 +222,13 @@ def test_write_file_directory_error(mock_isdir, mock_safe_path):
 
 @patch("jurbas_code.tools.safe_path")
 @patch("jurbas_code.tools.os.makedirs")
+@patch("jurbas_code.tools.os.path.exists")
+@patch("jurbas_code.tools.shutil.copy2")
 @patch("jurbas_code.tools.os.path.getsize")
-def test_write_file_success(mock_getsize, mock_makedirs, mock_safe_path):
+def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
+                            mock_makedirs, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = False  # No backup needed
     mock_getsize.return_value = 12
 
     with patch("builtins.open", MagicMock()) as mock_open:
@@ -235,7 +239,27 @@ def test_write_file_success(mock_getsize, mock_makedirs, mock_safe_path):
     mock_makedirs.assert_called_once_with("/allowed", exist_ok=True)
     mock_open.assert_called_once_with("/allowed/test.txt", "w", encoding="utf-8")
     mock_file.write.assert_called_once_with("file content")
+    mock_copy2.assert_not_called()
     assert "written successfully (12 bytes)" in result
+
+
+@patch("jurbas_code.tools.safe_path")
+@patch("jurbas_code.tools.os.makedirs")
+@patch("jurbas_code.tools.os.path.exists")
+@patch("jurbas_code.tools.shutil.copy2")
+@patch("jurbas_code.tools.os.path.getsize")
+def test_write_file_with_backup(mock_getsize, mock_copy2, mock_exists,
+                                mock_makedirs, mock_safe_path):
+    mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = True   # Needs backup
+    mock_getsize.return_value = 12
+
+    with patch("builtins.open", MagicMock()):
+        result = jurbas_code.tools.write_file("test.txt", "file content")
+
+    mock_copy2.assert_called_once_with("/allowed/test.txt",
+                                       "/allowed/test.txt.bak")
+    assert "previous version backed up to 'test.txt.bak'" in result
 
 
 @patch("jurbas_code.tools.safe_path", side_effect=PermissionError("Path not allowed"))
