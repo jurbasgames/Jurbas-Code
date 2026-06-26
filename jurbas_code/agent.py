@@ -40,7 +40,7 @@ class Agent:
         model = resolve_provider_model(self.provider, self.client)
 
         for _step in range(self.max_tool_steps):
-            if self.provider == "deepseek":
+            if self.provider in ("deepseek", "antigravity"):
                 try:
                     response = self.client.chat.completions.create(
                         model=model,
@@ -52,7 +52,8 @@ class Agent:
                         tool_choice="auto",
                     )
                 except AuthenticationError as e:
-                    api_key = os.environ.get("DEEPSEEK_API_KEY") or ""
+                    env_var = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "ANTIGRAVITY_API_KEY"
+                    api_key = os.environ.get(env_var) or ""
                     if not api_key and hasattr(self.client, "api_key") and type(self.client.api_key).__name__ not in ("MagicMock", "Mock"):
                         api_key = str(self.client.api_key)
                     print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")

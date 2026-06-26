@@ -130,6 +130,11 @@ def main(args=None):
         if not api_key:
             print("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
             sys.exit(1)
+    elif provider == "antigravity":
+        api_key = (os.environ.get("ANTIGRAVITY_API_KEY") or "").strip()
+        if not api_key:
+            print("Error: ANTIGRAVITY_API_KEY environment variable is not set or is empty.")
+            sys.exit(1)
 
     try:
         client = get_client(provider)
