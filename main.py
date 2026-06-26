@@ -130,6 +130,11 @@ def main(args=None):
         if not api_key:
             print("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
             sys.exit(1)
+    elif provider == "codex":
+        api_key = (os.environ.get("CODEX_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
+        if not api_key:
+            print("Error: CODEX_API_KEY or OPENAI_API_KEY environment variable is not set or is empty.")
+            sys.exit(1)
 
     try:
         client = get_client(provider)
