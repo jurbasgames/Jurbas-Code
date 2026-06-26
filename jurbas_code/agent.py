@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from typing import Callable
 import anthropic
 
 from jurbas_code.security import (
@@ -35,7 +36,13 @@ class Agent:
         self.max_tool_steps = max_tool_steps
         self.session_tokens = {"prompt": 0, "completion": 0, "total": 0}
 
-    def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
+    def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None, stream_handler: Callable[[str], None] | None = None):
+        def emit(s):
+            if stream_handler:
+                stream_handler(s)
+            else:
+                print(s, end="", flush=True)
+
         self.messages.append({"role": "user", "content": user_input})
         model = resolve_provider_model(self.provider, self.client)
 
@@ -55,16 +62,17 @@ class Agent:
                     api_key = os.environ.get("DEEPSEEK_API_KEY") or ""
                     if not api_key and hasattr(self.client, "api_key") and type(self.client.api_key).__name__ not in ("MagicMock", "Mock"):
                         api_key = str(self.client.api_key)
-                    print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
+                    emit(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
+                    emit("\n")
                     sys.exit(1)
                 except RateLimitError as e:
-                    print(f"AI: Rate Limit Error: {e}\n")
+                    emit(f"AI: Rate Limit Error: {e}\n\n")
                     break
                 except APITimeoutError as e:
-                    print(f"AI: Timeout Error: {e}\n")
+                    emit(f"AI: Timeout Error: {e}\n\n")
                     break
                 except APIError as e:
-                    print(f"AI: API Error: {e}")
+                    emit(f"AI: API Error: {e}\n")
                     # Drop the failed turn
                     while self.messages and self.messages[-1].get("role") != "user":
                         self.messages.pop()
@@ -72,7 +80,7 @@ class Agent:
                         self.messages.pop()
                     break
                 except Exception as e:
-                    print(f"AI: Unexpected Error: {e}")
+                    emit(f"AI: Unexpected Error: {e}\n")
                     break
 
                 if not hasattr(response, "choices"):
@@ -104,19 +112,19 @@ class Agent:
                             reasoning = getattr(delta, "reasoning_content", None)
                             if reasoning:
                                 if not printed_ai_prefix:
-                                    print("AI: ", end="", flush=True)
+                                    emit("AI: ")
                                     printed_ai_prefix = True
                                 reasoning_content += reasoning
-                                print(reasoning, end="", flush=True)
+                                emit(reasoning)
 
                             if getattr(delta, "content", None) is not None:
                                 content_seen = True
                                 content += delta.content
                                 if delta.content:
                                     if not printed_ai_prefix:
-                                        print("AI: ", end="", flush=True)
+                                        emit("AI: ")
                                         printed_ai_prefix = True
-                                    print(delta.content, end="", flush=True)
+                                    emit(delta.content)
 
                             tool_calls_chunk = getattr(delta, "tool_calls", None)
                             if tool_calls_chunk:
@@ -137,14 +145,14 @@ class Agent:
                                     if getattr(tc_chunk.function, "arguments", None):
                                         tool_calls[index]["function"]["arguments"] += tc_chunk.function.arguments
                     except Exception as e:
-                        print(f"\n[Stream interrupted: {e}]")
+                        emit(f"\n[Stream interrupted: {e}]\n")
                         break
 
                     if printed_ai_prefix:
-                        print()
+                        emit("\n")
 
                     if not content_seen and not content and not reasoning_content and not tool_calls:
-                        print("AI: Error: No response choices returned from the API.\n")
+                        emit("AI: Error: No response choices returned from the API.\n\n")
                         break
 
                     assistant_msg_dict = {"role": role}
@@ -210,23 +218,23 @@ class Agent:
                         tools=convert_to_anthropic_tools(self.tools),
                     )
                 except anthropic.AuthenticationError as e:
-                    print(f"AI: Authentication Error: {e}")
+                    emit(f"AI: Authentication Error: {e}\n")
                     sys.exit(1)
                 except anthropic.RateLimitError as e:
-                    print(f"AI: Rate Limit Error: {e}\n")
+                    emit(f"AI: Rate Limit Error: {e}\n\n")
                     break
                 except anthropic.APITimeoutError as e:
-                    print(f"AI: Timeout Error: {e}\n")
+                    emit(f"AI: Timeout Error: {e}\n\n")
                     break
                 except anthropic.APIError as e:
-                    print(f"AI: API Error: {e}")
+                    emit(f"AI: API Error: {e}\n")
                     while self.messages and self.messages[-1].get("role") != "user":
                         self.messages.pop()
                     if self.messages and self.messages[-1].get("role") == "user":
                         self.messages.pop()
                     break
                 except Exception as e:
-                    print(f"AI: Unexpected Error: {e}")
+                    emit(f"AI: Unexpected Error: {e}\n")
                     break
 
                 usage = response.usage

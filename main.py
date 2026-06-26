@@ -157,7 +157,8 @@ def main(args=None):
             on_token_update=on_token_update,
             on_tool_call=on_tool_call,
             on_ai_reply=on_ai_reply,
-            confirm_handler=confirm_action
+            confirm_handler=confirm_action,
+            stream_handler=lambda s: print(s, end="", flush=True)
         )
         save_history(agent.messages)
 
