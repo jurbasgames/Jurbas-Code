@@ -2,6 +2,10 @@ import threading
 from unittest.mock import MagicMock, patch
 import pytest
 from jurbas_code.agent import Agent
+
+# Skip all tests in this file if textual is not installed
+pytest.importorskip("textual")
+
 from jurbas_code.tui.app import JurbasTUI, ConfirmationModal
 
 def test_run_agent_passes_confirm_handler():
