@@ -2,16 +2,9 @@
 
 This document describes the modular architecture of Jurbas-Code. The project is strictly organized into a single `jurbas_code/` package. The legacy `jurbas/` namespace is deprecated and must not be reintroduced.
 
-## Module Diagram
+## Diagrama
 
-```mermaid
-graph TD
-    A[main.py<br>CLI Entrypoint] --> B(jurbas_code.agent<br>Core Loop & Logic)
-    B --> C(jurbas_code.providers)
-    B --> D(jurbas_code.tools)
-    D --> E(jurbas_code.security)
-    B --> F(jurbas_code.prompts)
-```
+![Arquitetura](architecture.png)
 
 ## Module Boundaries
 
