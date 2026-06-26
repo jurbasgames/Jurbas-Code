@@ -12,8 +12,8 @@ class InputBar(TextArea):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.history = []
-        self.history_index = -1
+        self._input_history = []
+        self._input_history_index = -1
         self.show_line_numbers = False
 
     def on_key(self, event: events.Key) -> None:
@@ -35,23 +35,23 @@ class InputBar(TextArea):
     def _submit(self) -> None:
         text = self.text.strip()
         if text:
-            if not self.history or self.history[-1] != text:
-                self.history.append(text)
-            self.history_index = len(self.history)
+            if not self._input_history or self._input_history[-1] != text:
+                self._input_history.append(text)
+            self._input_history_index = len(self._input_history)
             self.post_message(self.Submitted(text))
             self.text = ""
 
     def _history_up(self) -> None:
-        if self.history and self.history_index > 0:
-            self.history_index -= 1
-            self.text = self.history[self.history_index]
+        if self._input_history and self._input_history_index > 0:
+            self._input_history_index -= 1
+            self.text = self._input_history[self._input_history_index]
             self.move_cursor((self.document.line_count - 1, len(self.document.get_line(self.document.line_count - 1))))
 
     def _history_down(self) -> None:
-        if self.history and self.history_index < len(self.history) - 1:
-            self.history_index += 1
-            self.text = self.history[self.history_index]
+        if self._input_history and self._input_history_index < len(self._input_history) - 1:
+            self._input_history_index += 1
+            self.text = self._input_history[self._input_history_index]
             self.move_cursor((self.document.line_count - 1, len(self.document.get_line(self.document.line_count - 1))))
-        elif self.history_index == len(self.history) - 1:
-            self.history_index += 1
+        elif self._input_history_index == len(self._input_history) - 1:
+            self._input_history_index += 1
             self.text = ""
