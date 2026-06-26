@@ -13,7 +13,7 @@ class InputBar(TextArea):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._input_history = []
-        self._input_history_index = -1
+        self._input_history_index = 0
         self.show_line_numbers = False
 
     def on_key(self, event: events.Key) -> None:
