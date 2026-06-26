@@ -82,10 +82,13 @@ def test_list_directory_permission_error(mock_safe_path):
 # === TESTS FOR write_file() ===
 @patch('jurbas_code.tools.safe_path')
 @patch('os.makedirs')
+@patch('os.path.exists')
+@patch('shutil.copy2')
 @patch('os.path.getsize')
 @patch('builtins.open', new_callable=MagicMock)
-def test_write_file_success(mock_open, mock_getsize, mock_makedirs, mock_safe_path):
+def test_write_file_success(mock_open, mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
+    mock_exists.return_value = False # No backup needed
     mock_getsize.return_value = 12
 
     mock_file = MagicMock()
@@ -96,6 +99,7 @@ def test_write_file_success(mock_open, mock_getsize, mock_makedirs, mock_safe_pa
     mock_makedirs.assert_called_once_with("/allowed", exist_ok=True)
     mock_open.assert_called_once_with("/allowed/test.txt", "w", encoding="utf-8")
     mock_file.write.assert_called_once_with("file content")
+    mock_copy2.assert_not_called()
     assert "written successfully (12 bytes)" in result
 
 # === BASH & SAFETY TESTS ===
