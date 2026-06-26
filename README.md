@@ -32,12 +32,14 @@ Available providers:
 
 - `claude` (default) — uses your **Claude Code subscription** OAuth token, not Anthropic API-key billing.
 - `deepseek` — uses DeepSeek's OpenAI-compatible API.
+- `codex` — uses OpenAI's GPT-4o or compatible models.
 
 Select the provider with `LLM_PROVIDER`:
 
 ```bash
 LLM_PROVIDER=claude   uv run main.py
 LLM_PROVIDER=deepseek uv run main.py
+LLM_PROVIDER=codex    uv run main.py
 ```
 
 ## Provider `claude` — Claude Code subscription
@@ -80,6 +82,13 @@ The Claude provider refuses to run if `ANTHROPIC_API_KEY` is set, because this p
 ```bash
 export DEEPSEEK_API_KEY=<your-key>
 LLM_PROVIDER=deepseek uv run main.py
+```
+
+## Provider `codex`
+
+```bash
+export CODEX_API_KEY=<your-key>  # or OPENAI_API_KEY
+LLM_PROVIDER=codex uv run main.py
 ```
 
 ## 🧪 Tests

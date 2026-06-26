@@ -40,23 +40,31 @@ class Agent:
         model = resolve_provider_model(self.provider, self.client)
 
         for _step in range(self.max_tool_steps):
-            if self.provider == "deepseek":
+            if self.provider in ("deepseek", "codex"):
                 try:
-                    response = self.client.chat.completions.create(
-                        model=model,
-                        messages=self.messages,
-                        stream=True,
-                        reasoning_effort="high",
-                        extra_body={"thinking": {"type": "enabled"}},
-                        tools=self.tools,
-                        tool_choice="auto",
-                    )
+                    kwargs = {
+                        "model": model,
+                        "messages": self.messages,
+                        "stream": True,
+                        "tools": self.tools,
+                        "tool_choice": "auto",
+                    }
+                    if self.provider == "deepseek":
+                        kwargs["reasoning_effort"] = "high"
+                        kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+
+                    response = self.client.chat.completions.create(**kwargs)
                 except AuthenticationError as e:
-                    api_key = os.environ.get("DEEPSEEK_API_KEY") or ""
+                    if self.provider == "deepseek":
+                        api_key = os.environ.get("DEEPSEEK_API_KEY") or ""
+                    else:
+                        api_key = os.environ.get("CODEX_API_KEY") or os.environ.get("OPENAI_API_KEY") or ""
+
                     if not api_key and hasattr(self.client, "api_key") and type(self.client.api_key).__name__ not in ("MagicMock", "Mock"):
                         api_key = str(self.client.api_key)
                     print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
                     sys.exit(1)
+                    return
                 except RateLimitError as e:
                     print(f"AI: Rate Limit Error: {e}\n")
                     break

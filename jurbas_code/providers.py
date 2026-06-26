@@ -12,6 +12,7 @@ CLAUDE_CODE_USER_AGENT = "claude-cli/2.1.183 (external, cli)"
 ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
+DEFAULT_CODEX_MODEL = "gpt-4o"
 CLAUDE_CODE_BETA_FLAGS = (
     "oauth-2025-04-20",
     "interleaved-thinking-2025-05-14",
@@ -88,10 +89,14 @@ def get_client(provider_name: str) -> Any:
             api_key=os.environ.get("DEEPSEEK_API_KEY"),
             base_url="https://api.deepseek.com",
         )
+    elif provider == "codex":
+        from openai import OpenAI
+        api_key = os.environ.get("CODEX_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        return OpenAI(api_key=api_key)
     elif provider == "claude":
         return get_claude_client()
     else:
-        raise ValueError(f"Unknown provider: {provider}. Use 'claude' or 'deepseek'.")
+        raise ValueError(f"Unknown provider: {provider}. Use 'claude', 'deepseek' or 'codex'.")
 
 def _listed_model_ids(client: Any) -> list[str]:
     models = getattr(client, "models", None)
@@ -111,6 +116,7 @@ def _env_model(provider: str) -> str | None:
     env_var = {
         "claude": "CLAUDE_MODEL",
         "deepseek": "DEEPSEEK_MODEL",
+        "codex": "CODEX_MODEL",
     }.get(provider)
     if env_var:
         model = os.environ.get(env_var, "").strip()
@@ -128,51 +134,7 @@ def resolve_provider_model(provider_name: str, client: Any) -> str:
     defaults = {
         "claude": DEFAULT_CLAUDE_MODEL,
         "deepseek": DEFAULT_DEEPSEEK_MODEL,
-    }
-    default_model = defaults[provider]
-    try:
-        model_ids = _listed_model_ids(client)
-    except Exception:
-        return default_model
-    if default_model in model_ids:
-        return default_model
-    return model_ids[0] if model_ids else default_model
-
-def _listed_model_ids(client: Any) -> list[str]:
-    models = getattr(client, "models", None)
-    list_models = getattr(models, "list", None)
-    if not callable(list_models):
-        return []
-    response = list_models()
-    items = getattr(response, "data", response)
-    model_ids = []
-    for item in items:
-        model_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
-        if isinstance(model_id, str) and model_id:
-            model_ids.append(model_id)
-    return model_ids
-
-def _env_model(provider: str) -> str | None:
-    env_var = {
-        "claude": "CLAUDE_MODEL",
-        "deepseek": "DEEPSEEK_MODEL",
-    }.get(provider)
-    if env_var:
-        model = os.environ.get(env_var, "").strip()
-        if model:
-            return model
-    model = os.environ.get("LLM_MODEL", "").strip()
-    return model or None
-
-def resolve_provider_model(provider_name: str, client: Any) -> str:
-    provider = provider_name.lower()
-    env_model = _env_model(provider)
-    if env_model:
-        return env_model
-
-    defaults = {
-        "claude": DEFAULT_CLAUDE_MODEL,
-        "deepseek": DEFAULT_DEEPSEEK_MODEL,
+        "codex": DEFAULT_CODEX_MODEL,
     }
     default_model = defaults[provider]
     try:
