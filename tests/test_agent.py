@@ -259,3 +259,30 @@ def test_agent_claude_unexpected_error(mock_client, capsys):
     captured = capsys.readouterr()
     assert "AI: Unexpected Error:" in captured.out
 
+
+def test_agent_chat_uses_stream_handler(mock_client):
+    agent = Agent(mock_client, provider="deepseek")
+
+    def _make_stream_chunks(*text_fragments):
+        for frag in text_fragments:
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta.content = frag
+            chunk.choices[0].delta.role = None
+            chunk.choices[0].delta.reasoning_content = None
+            chunk.choices[0].delta.tool_calls = None
+            yield chunk
+
+    mock_response = _make_stream_chunks("Hello", " world")
+    mock_client.chat.completions.create.return_value = mock_response
+
+    stream_output = []
+    def stream_handler(s):
+        stream_output.append(s)
+
+    agent.chat("Hi", stream_handler=stream_handler)
+
+    full_output = "".join(stream_output)
+    assert "AI: " in full_output
+    assert "Hello" in full_output
+    assert " world" in full_output
