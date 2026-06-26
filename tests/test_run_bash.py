@@ -1,6 +1,12 @@
 import unittest
-from unittest.mock import patch, MagicMock
-from main import _is_dangerous, _is_readonly_bash, _requires_confirmation, confirm_action, run_bash, web_search
+from unittest.mock import patch
+from main import (
+    _is_dangerous,
+    _is_readonly_bash,
+    _requires_confirmation,
+    confirm_action,
+    run_bash,
+)
 
 
 class TestMain(unittest.TestCase):
@@ -22,8 +28,12 @@ class TestMain(unittest.TestCase):
         self.assertFalse(_is_readonly_bash("rm -rf /"))
 
     def test_requires_confirmation(self):
-        self.assertTrue(_requires_confirmation("write_file", {"file_path": "a.txt", "content": "a"}))
-        self.assertTrue(_requires_confirmation("run_bash", {"command": "echo ok && ls"}))
+        self.assertTrue(
+            _requires_confirmation("write_file", {"file_path": "a.txt", "content": "a"})
+        )
+        self.assertTrue(
+            _requires_confirmation("run_bash", {"command": "echo ok && ls"})
+        )
         self.assertFalse(_requires_confirmation("run_bash", {"command": "ls"}))
         # Non-dict args should require confirmation to be safe
         self.assertTrue(_requires_confirmation("run_bash", "echo ok"))
@@ -34,12 +44,12 @@ class TestMain(unittest.TestCase):
         self.assertEqual(run_bash(123), "Error: command must be a string.")
         self.assertEqual(run_bash(None), "Error: command must be a string.")
 
-    @patch('builtins.input', return_value='y')
+    @patch("builtins.input", return_value="y")
     def test_confirm_action(self, mock_input):
         self.assertTrue(confirm_action("run_bash", {"command": "ls"}))
-        self.assertTrue(confirm_action("run_bash", "ls")) # Non-dict
-        self.assertTrue(confirm_action("run_bash", None)) # Non-dict
+        self.assertTrue(confirm_action("run_bash", "ls"))  # Non-dict
+        self.assertTrue(confirm_action("run_bash", None))  # Non-dict
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

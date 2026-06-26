@@ -39,6 +39,7 @@ def clean_history():
 # safe_path()
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_safe_path_relative_resolves_against_allowed_base():
     """A relative path is joined with ALLOWED_BASE before resolution."""
     resolved = jurbas_code.security.safe_path("sub/file.txt")
@@ -54,6 +55,7 @@ def test_safe_path_outside_raises():
 # ═══════════════════════════════════════════════════════════════════════
 # is_secret_path()
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_is_secret_path_true_for_dotenv():
     assert jurbas_code.security.is_secret_path(".env") is True
@@ -74,6 +76,7 @@ def test_is_secret_path_true_for_private_key():
 # ═══════════════════════════════════════════════════════════════════════
 # load_dotenv()
 # ═══════════════════════════════════════════════════════════════════════
+
 
 @patch("jurbas_code.security.safe_path")
 @patch.dict("os.environ", {}, clear=True)
@@ -106,6 +109,7 @@ def test_load_dotenv_does_not_overwrite(mock_safe_path, tmp_path):
 # read_file()
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @patch("jurbas_code.tools.safe_path")
 @patch("os.path.exists")
 @patch("builtins.open", new_callable=MagicMock)
@@ -124,7 +128,9 @@ def test_read_file_success(mock_open, mock_exists, mock_safe_path):
 @patch("jurbas_code.tools.safe_path")
 def test_read_file_permission_error(mock_safe_path):
     mock_safe_path.side_effect = PermissionError("Path not allowed: test.txt")
-    assert "Error: Path not allowed: test.txt" in jurbas_code.tools.read_file("test.txt")
+    assert "Error: Path not allowed: test.txt" in jurbas_code.tools.read_file(
+        "test.txt"
+    )
 
 
 @patch("jurbas_code.tools.safe_path")
@@ -132,7 +138,9 @@ def test_read_file_permission_error(mock_safe_path):
 def test_read_file_not_found(mock_exists, mock_safe_path):
     mock_safe_path.return_value = "/allowed/test.txt"
     mock_exists.return_value = False
-    assert "Error: file 'test.txt' not found." in jurbas_code.tools.read_file("test.txt")
+    assert "Error: file 'test.txt' not found." in jurbas_code.tools.read_file(
+        "test.txt"
+    )
 
 
 @patch("jurbas_code.tools.safe_path")
@@ -150,6 +158,7 @@ def test_read_file_directory_error(mock_isdir, mock_exists, mock_safe_path):
 # list_directory()
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_list_directory_non_string_path():
     result = jurbas_code.tools.list_directory(cast(str, None))
     assert "dir_path must be a string" in result
@@ -160,8 +169,9 @@ def test_list_directory_non_string_path():
 @patch("os.path.isdir")
 @patch("os.listdir")
 @patch("os.path.getsize")
-def test_list_directory_success(mock_getsize, mock_listdir, mock_isdir,
-                                mock_exists, mock_safe_path):
+def test_list_directory_success(
+    mock_getsize, mock_listdir, mock_isdir, mock_exists, mock_safe_path
+):
     mock_safe_path.return_value = "/allowed/dir"
     mock_exists.return_value = True
 
@@ -171,6 +181,7 @@ def test_list_directory_success(mock_getsize, mock_listdir, mock_isdir,
         if path.endswith("subdir"):
             return True
         return False
+
     mock_isdir.side_effect = isdir_side_effect
 
     mock_listdir.return_value = ["file1.txt", "subdir"]
@@ -208,9 +219,14 @@ def test_list_directory_not_a_dir(mock_safe_path):
 # write_file()
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_write_file_non_string_arguments():
-    assert "file_path must be a string" in jurbas_code.tools.write_file(cast(str, None), "content")
-    assert "content must be a string" in jurbas_code.tools.write_file("test.txt", cast(str, None))
+    assert "file_path must be a string" in jurbas_code.tools.write_file(
+        cast(str, None), "content"
+    )
+    assert "content must be a string" in jurbas_code.tools.write_file(
+        "test.txt", cast(str, None)
+    )
 
 
 @patch("jurbas_code.tools.safe_path", return_value="/allowed/dir")
@@ -225,8 +241,9 @@ def test_write_file_directory_error(mock_isdir, mock_safe_path):
 @patch("jurbas_code.tools.os.path.exists")
 @patch("jurbas_code.tools.shutil.copy2")
 @patch("jurbas_code.tools.os.path.getsize")
-def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
-                            mock_makedirs, mock_safe_path):
+def test_write_file_success(
+    mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path
+):
     mock_safe_path.return_value = "/allowed/test.txt"
     mock_exists.return_value = False  # No backup needed
     mock_getsize.return_value = 12
@@ -248,17 +265,17 @@ def test_write_file_success(mock_getsize, mock_copy2, mock_exists,
 @patch("jurbas_code.tools.os.path.exists")
 @patch("jurbas_code.tools.shutil.copy2")
 @patch("jurbas_code.tools.os.path.getsize")
-def test_write_file_with_backup(mock_getsize, mock_copy2, mock_exists,
-                                mock_makedirs, mock_safe_path):
+def test_write_file_with_backup(
+    mock_getsize, mock_copy2, mock_exists, mock_makedirs, mock_safe_path
+):
     mock_safe_path.return_value = "/allowed/test.txt"
-    mock_exists.return_value = True   # Needs backup
+    mock_exists.return_value = True  # Needs backup
     mock_getsize.return_value = 12
 
     with patch("builtins.open", MagicMock()):
         result = jurbas_code.tools.write_file("test.txt", "file content")
 
-    mock_copy2.assert_called_once_with("/allowed/test.txt",
-                                       "/allowed/test.txt.bak")
+    mock_copy2.assert_called_once_with("/allowed/test.txt", "/allowed/test.txt.bak")
     assert "previous version backed up to 'test.txt.bak'" in result
 
 
@@ -271,6 +288,7 @@ def test_write_file_permission_error(mock_safe_path):
 # ═══════════════════════════════════════════════════════════════════════
 # run_bash()
 # ═══════════════════════════════════════════════════════════════════════
+
 
 @patch("jurbas_code.tools.subprocess.run")
 def test_run_bash_success(mock_run):
@@ -294,6 +312,7 @@ def test_run_bash_error(mock_run):
 # main() loop  (streaming-based)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _make_stream_chunks(*text_fragments: str):
     """Helper: yield minimal SSE-like chunks for streaming tests."""
     for frag in text_fragments:
@@ -312,11 +331,14 @@ def _make_stream_chunks(*text_fragments: str):
 def test_main_loop_exit(mock_print, mock_input, mock_openai):
     """Exiting immediately should not call the API."""
     mock_input.return_value = "exit"
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}
+    ):
         main.main(args=[])
     mock_openai.assert_called_once()
-    ai_prints = [c for c in mock_print.call_args_list
-                 if c.args and "AI:" in str(c.args[0])]
+    ai_prints = [
+        c for c in mock_print.call_args_list if c.args and "AI:" in str(c.args[0])
+    ]
     assert len(ai_prints) == 0
 
 
@@ -364,11 +386,12 @@ def test_main_loop_streams_content(mock_print, mock_input, mock_openai):
         "Hello ", "world!"
     )
 
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}
+    ):
         main.main(args=[])
 
-    print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list
-                         if c.args)
+    print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list if c.args)
     assert "Hello" in print_text
     assert "world" in print_text
 
@@ -377,8 +400,7 @@ def test_main_loop_streams_content(mock_print, mock_input, mock_openai):
 @patch("builtins.input")
 @patch("builtins.print")
 @patch("jurbas_code.tools.read_file")
-def test_main_loop_with_tool_call(mock_read_file, mock_print,
-                                  mock_input, mock_openai):
+def test_main_loop_with_tool_call(mock_read_file, mock_print, mock_input, mock_openai):
     """A tool-call in the stream leads to tool execution."""
     mock_input.side_effect = ["read something", "exit"]
 
@@ -407,22 +429,26 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print,
     tool_call.function = func
 
     mock_client.chat.completions.create.side_effect = [
-        iter([
-            _chunk(content="", tool_calls=None),
-            _chunk(content=None, tool_calls=[tool_call],
-                   finish_reason="tool_calls"),
-        ]),
+        iter(
+            [
+                _chunk(content="", tool_calls=None),
+                _chunk(
+                    content=None, tool_calls=[tool_call], finish_reason="tool_calls"
+                ),
+            ]
+        ),
         iter([_chunk(content="Here is the result")]),
     ]
 
     mock_read_file.return_value = "mocked content"
 
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}
+    ):
         main.main(args=[])
 
     mock_read_file.assert_called_once_with("test.txt")
-    print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list
-                         if c.args)
+    print_text = "".join(str(c.args[0]) for c in mock_print.call_args_list if c.args)
     assert "Here is the result" in print_text
 
 
@@ -430,19 +456,24 @@ def test_main_loop_with_tool_call(mock_read_file, mock_print,
 # Extra safety & error handling tests
 # ═══════════════════════════════════════════════════════════════════════
 
-@patch('builtins.print')
+
+@patch("builtins.print")
 def test_main_missing_deepseek_api_key(mock_print):
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "   "}):
-        with patch('sys.exit', side_effect=SystemExit) as mock_exit:
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "   "}
+    ):
+        with patch("sys.exit", side_effect=SystemExit) as mock_exit:
             with pytest.raises(SystemExit):
                 main.main(args=[])
             mock_exit.assert_called_once_with(1)
-            mock_print.assert_any_call("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+            mock_print.assert_any_call(
+                "Error: DEEPSEEK_API_KEY environment variable is not set or is empty."
+            )
 
 
-@patch('openai.OpenAI')
-@patch('builtins.input')
-@patch('builtins.print')
+@patch("openai.OpenAI")
+@patch("builtins.input")
+@patch("builtins.print")
 def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
     from openai import AuthenticationError
 
@@ -453,17 +484,21 @@ def test_main_authentication_error_exits(mock_print, mock_input, mock_openai):
     err = AuthenticationError("Invalid API Key", response=MagicMock(), body={})
     mock_client.chat.completions.create.side_effect = err
 
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-123456789"}):
-        with patch('sys.exit', side_effect=SystemExit) as mock_exit:
-                with pytest.raises(SystemExit):
-                    main.main(args=[])
-                mock_exit.assert_called_once_with(1)
-                mock_print.assert_any_call("AI: Authentication Error: The API key starting with 'sk-1' is invalid or expired. Invalid API Key")
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-123456789"}
+    ):
+        with patch("sys.exit", side_effect=SystemExit) as mock_exit:
+            with pytest.raises(SystemExit):
+                main.main(args=[])
+            mock_exit.assert_called_once_with(1)
+            mock_print.assert_any_call(
+                "AI: Authentication Error: The API key starting with 'sk-1' is invalid or expired. Invalid API Key"
+            )
 
 
-@patch('openai.OpenAI')
-@patch('builtins.input')
-@patch('builtins.print')
+@patch("openai.OpenAI")
+@patch("builtins.input")
+@patch("builtins.print")
 def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
     from openai import APIError
 
@@ -487,20 +522,24 @@ def test_main_api_error_drops_turn(mock_print, mock_input, mock_openai):
 
     mock_client.chat.completions.create.side_effect = [err, _chunk_stream()]
 
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}
+    ):
         main.main(args=[])
 
         assert mock_client.chat.completions.create.call_count == 2
-        
+
         second_call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
-        contents = [m["content"] for m in second_call_kwargs["messages"] if m["role"] == "user"]
+        contents = [
+            m["content"] for m in second_call_kwargs["messages"] if m["role"] == "user"
+        ]
         assert "hello" not in contents
         assert "retry_hello" in contents
 
 
-@patch('openai.OpenAI')
-@patch('builtins.input')
-@patch('builtins.print')
+@patch("openai.OpenAI")
+@patch("builtins.input")
+@patch("builtins.print")
 def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
     mock_input.side_effect = ["read env", "quit"]
     mock_client = MagicMock()
@@ -513,7 +552,7 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
         choice.delta.content = ""
         choice.delta.role = "assistant"
         choice.delta.reasoning_content = None
-        
+
         tool_call = MagicMock()
         tool_call.index = 0
         tool_call.id = "call_env"
@@ -522,7 +561,7 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
         func.name = "read_file"
         func.arguments = '{"file_path": ".env"}'
         tool_call.function = func
-        
+
         choice.delta.tool_calls = [tool_call]
         chunk.choices = [choice]
         yield chunk
@@ -539,22 +578,32 @@ def test_main_read_file_env_redacted(mock_print, mock_input, mock_openai):
         chunk.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
         yield chunk
 
-    mock_client.chat.completions.create.side_effect = [_tool_call_stream(), _text_response_stream()]
+    mock_client.chat.completions.create.side_effect = [
+        _tool_call_stream(),
+        _text_response_stream(),
+    ]
 
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}
+    ):
         main.main(args=[])
 
     call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
     tool_result = [m for m in call_kwargs["messages"] if m["role"] == "tool"][0]
-    assert "<REDACTED: .env content is hidden from model for security>" in tool_result["content"]
+    assert (
+        "<REDACTED: .env content is hidden from model for security>"
+        in tool_result["content"]
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Versioning (issue #9)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_version_attribute_is_nonempty_string():
     import jurbas_code
+
     assert isinstance(jurbas_code.__version__, str) and jurbas_code.__version__
     assert main.__version__ == jurbas_code.__version__
 
@@ -563,7 +612,9 @@ def test_source_checkout_version_fallback_reads_pyproject():
     import jurbas_code
 
     pyproject = tomllib.loads(
-        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
     )
 
     assert jurbas_code._read_version_from_pyproject() == pyproject["project"]["version"]
@@ -589,28 +640,28 @@ class TestWebSearch:
 
     def test_missing_library(self):
         """Graceful message when duckduckgo_search is not installed."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', False):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", False):
             result = main.web_search("test query")
             assert "not installed" in result
             assert "ddgs" in result
 
     def test_empty_query(self):
         """Empty or whitespace query should be rejected."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             assert "non-empty string" in main.web_search("")
             assert "non-empty string" in main.web_search("   ")
 
     def test_non_string_query(self):
         """Non-string query should be rejected."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             assert "non-empty string" in main.web_search(123)
             assert "non-empty string" in main.web_search(None)
             assert "non-empty string" in main.web_search([])
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_max_results_clamped_low(self, mock_ddgs_class):
         """max_results < 1 should be clamped to default 5."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = []
@@ -618,10 +669,10 @@ class TestWebSearch:
             main.web_search("python", max_results=0)
             mock_instance.text.assert_called_with("python", max_results=5)
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_max_results_clamped_high(self, mock_ddgs_class):
         """max_results > 20 should be clamped to default 5."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = []
@@ -629,14 +680,18 @@ class TestWebSearch:
             main.web_search("python", max_results=100)
             mock_instance.text.assert_called_with("python", max_results=5)
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_successful_search(self, mock_ddgs_class):
         """Valid search returns formatted results."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [
-                {"title": "Pytest Docs", "href": "https://docs.pytest.org", "body": "Full pytest documentation."},
+                {
+                    "title": "Pytest Docs",
+                    "href": "https://docs.pytest.org",
+                    "body": "Full pytest documentation.",
+                },
             ]
 
             result = main.web_search("pytest", max_results=1)
@@ -647,10 +702,10 @@ class TestWebSearch:
             assert "Full pytest documentation" in result
             mock_instance.text.assert_called_once_with("pytest", max_results=1)
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_no_results(self, mock_ddgs_class):
         """Empty result list from DDGS."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = []
@@ -658,10 +713,10 @@ class TestWebSearch:
             result = main.web_search("nonexistent_xyz")
             assert "No results found" in result
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_link_fallback(self, mock_ddgs_class):
         """Use 'link' key when 'href' is not present."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [
@@ -671,10 +726,10 @@ class TestWebSearch:
             result = main.web_search("example", max_results=1)
             assert "https://example.org" in result
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_snippet_truncation(self, mock_ddgs_class):
         """Long snippets are truncated at 300 characters."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             long_body = "A" * 500
@@ -688,10 +743,10 @@ class TestWebSearch:
             # Should not contain the full 500 chars
             assert long_body not in result
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_api_error(self, mock_ddgs_class):
         """DDGS exception is caught and reported."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.side_effect = Exception("Rate limit exceeded")
@@ -700,15 +755,19 @@ class TestWebSearch:
             assert "Error performing web search" in result
             assert "Rate limit exceeded" in result
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_multiple_results_formatting(self, mock_ddgs_class):
         """Multiple results are numbered and separated."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [
                 {"title": "Result A", "href": "https://a.com", "body": "First result."},
-                {"title": "Result B", "href": "https://b.com", "body": "Second result."},
+                {
+                    "title": "Result B",
+                    "href": "https://b.com",
+                    "body": "Second result.",
+                },
                 {"title": "Result C", "href": "https://c.com", "body": "Third result."},
             ]
 
@@ -720,10 +779,10 @@ class TestWebSearch:
             assert "3. Result C" in result
             mock_instance.text.assert_called_once_with("test", max_results=3)
 
-    @patch('jurbas_code.tools.DDGS')
+    @patch("jurbas_code.tools.DDGS")
     def test_missing_fields_in_result(self, mock_ddgs_class):
         """Result with missing optional fields (title/href/body) should not crash."""
-        with patch('jurbas_code.tools.HAS_WEB_SEARCH', True):
+        with patch("jurbas_code.tools.HAS_WEB_SEARCH", True):
             mock_instance = MagicMock()
             mock_ddgs_class.return_value.__enter__.return_value = mock_instance
             mock_instance.text.return_value = [

@@ -3,15 +3,18 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict
 
+
 @dataclass
 class Config:
-    model_roles: Dict[str, str] = field(default_factory=lambda: {
-        "embedding": "text-embedding-3-small",
-        "chat": "claude-3-5-sonnet-latest"
-    })
-    index_paths: Dict[str, str] = field(default_factory=lambda: {
-        "default": ".jurbas_index"
-    })
+    model_roles: Dict[str, str] = field(
+        default_factory=lambda: {
+            "embedding": "text-embedding-3-small",
+            "chat": "claude-3-5-sonnet-latest",
+        }
+    )
+    index_paths: Dict[str, str] = field(
+        default_factory=lambda: {"default": ".jurbas_index"}
+    )
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -37,6 +40,7 @@ class Config:
                 pass
 
         return config
+
 
 def get_config() -> Config:
     return Config.from_env()

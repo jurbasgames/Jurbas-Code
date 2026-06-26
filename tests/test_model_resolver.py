@@ -38,7 +38,10 @@ def test_provider_model_env_wins_over_llm_model(providers, provider, env_var):
         {env_var: "provider-specific-model", "LLM_MODEL": "generic-model"},
         clear=True,
     ):
-        assert providers.resolve_provider_model(provider, client) == "provider-specific-model"
+        assert (
+            providers.resolve_provider_model(provider, client)
+            == "provider-specific-model"
+        )
 
 
 @pytest.mark.parametrize("providers", [jurbas_code_providers])
@@ -66,8 +69,12 @@ def test_model_list_success_uses_listed_model(providers, provider):
         ("deepseek", "DEFAULT_DEEPSEEK_MODEL"),
     ],
 )
-def test_model_list_failure_falls_back_to_known_default(providers, provider, default_name):
+def test_model_list_failure_falls_back_to_known_default(
+    providers, provider, default_name
+):
     client = FakeClient(error=RuntimeError("offline"))
 
     with patch.dict("os.environ", {}, clear=True):
-        assert providers.resolve_provider_model(provider, client) == getattr(providers, default_name)
+        assert providers.resolve_provider_model(provider, client) == getattr(
+            providers, default_name
+        )

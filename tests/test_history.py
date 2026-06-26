@@ -1,8 +1,8 @@
 import unittest
 import os
 import json
-from unittest.mock import patch
 from main import load_history, save_history, HISTORY_FILE, SYSTEM_PROMPT
+
 
 class TestHistory(unittest.TestCase):
     def setUp(self):
@@ -22,7 +22,7 @@ class TestHistory(unittest.TestCase):
     def test_save_and_load_history(self):
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": "Hello"}
+            {"role": "user", "content": "Hello"},
         ]
         save_history(messages)
         loaded = load_history()
@@ -32,7 +32,7 @@ class TestHistory(unittest.TestCase):
         old_prompt = "Old Prompt"
         messages = [
             {"role": "system", "content": old_prompt},
-            {"role": "user", "content": "Hello"}
+            {"role": "user", "content": "Hello"},
         ]
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(messages, f)
@@ -48,5 +48,6 @@ class TestHistory(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]["role"], "system")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

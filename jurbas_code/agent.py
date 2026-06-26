@@ -4,11 +4,7 @@ import sys
 import anthropic
 
 from jurbas_code.security import (
-    ALLOWED_BASE,
     MAX_TOOL_STEPS,
-    safe_path,
-    _is_dangerous,
-    _is_readonly_bash,
     _requires_confirmation,
 )
 from jurbas_code.prompts import SYSTEM_PROMPT
@@ -25,8 +21,16 @@ from jurbas_code.providers import (
 
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 
+
 class Agent:
-    def __init__(self, client, provider, system_prompt=SYSTEM_PROMPT, tools=TOOLS_SCHEMA, max_tool_steps=MAX_TOOL_STEPS):
+    def __init__(
+        self,
+        client,
+        provider,
+        system_prompt=SYSTEM_PROMPT,
+        tools=TOOLS_SCHEMA,
+        max_tool_steps=MAX_TOOL_STEPS,
+    ):
         self.client = client
         self.provider = provider
         self.messages = [{"role": "system", "content": system_prompt}]
@@ -34,7 +38,15 @@ class Agent:
         self.max_tool_steps = max_tool_steps
         self.session_tokens = {"prompt": 0, "completion": 0, "total": 0}
 
-    def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
+    def chat(
+        self,
+        user_input,
+        on_token_update=None,
+        on_tool_call=None,
+        on_tool_result=None,
+        on_ai_reply=None,
+        confirm_handler=None,
+    ):
         self.messages.append({"role": "user", "content": user_input})
         model = resolve_provider_model(self.provider, self.client)
 
@@ -52,9 +64,16 @@ class Agent:
                     )
                 except AuthenticationError as e:
                     api_key = os.environ.get("DEEPSEEK_API_KEY") or ""
-                    if not api_key and hasattr(self.client, "api_key") and type(self.client.api_key).__name__ not in ("MagicMock", "Mock"):
+                    if (
+                        not api_key
+                        and hasattr(self.client, "api_key")
+                        and type(self.client.api_key).__name__
+                        not in ("MagicMock", "Mock")
+                    ):
                         api_key = str(self.client.api_key)
-                    print(f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}")
+                    print(
+                        f"AI: Authentication Error: The API key starting with '{api_key[:4]}' is invalid or expired. {e}"
+                    )
                     sys.exit(1)
                 except RateLimitError as e:
                     print(f"AI: Rate Limit Error: {e}\n")
@@ -95,7 +114,12 @@ class Agent:
                                     self.session_tokens["completion"] += c_tokens
                                     self.session_tokens["total"] += t_tokens
                                     if on_token_update:
-                                        on_token_update(p_tokens, c_tokens, t_tokens, self.session_tokens)
+                                        on_token_update(
+                                            p_tokens,
+                                            c_tokens,
+                                            t_tokens,
+                                            self.session_tokens,
+                                        )
                                 continue
                             delta = chunk.choices[0].delta
                             if getattr(delta, "role", None):
@@ -122,19 +146,28 @@ class Agent:
                                 for tc_chunk in tool_calls_chunk:
                                     index = tc_chunk.index
                                     while len(tool_calls) <= index:
-                                        tool_calls.append({
-                                            "id": "",
-                                            "type": "function",
-                                            "function": {"name": "", "arguments": ""},
-                                        })
+                                        tool_calls.append(
+                                            {
+                                                "id": "",
+                                                "type": "function",
+                                                "function": {
+                                                    "name": "",
+                                                    "arguments": "",
+                                                },
+                                            }
+                                        )
                                     if tc_chunk.id:
                                         tool_calls[index]["id"] += tc_chunk.id
                                     if getattr(tc_chunk, "type", None):
                                         tool_calls[index]["type"] = tc_chunk.type
                                     if getattr(tc_chunk.function, "name", None):
-                                        tool_calls[index]["function"]["name"] += tc_chunk.function.name
+                                        tool_calls[index]["function"]["name"] += (
+                                            tc_chunk.function.name
+                                        )
                                     if getattr(tc_chunk.function, "arguments", None):
-                                        tool_calls[index]["function"]["arguments"] += tc_chunk.function.arguments
+                                        tool_calls[index]["function"]["arguments"] += (
+                                            tc_chunk.function.arguments
+                                        )
                     except Exception as e:
                         print(f"\n[Stream interrupted: {e}]")
                         break
@@ -142,7 +175,12 @@ class Agent:
                     if printed_ai_prefix:
                         print()
 
-                    if not content_seen and not content and not reasoning_content and not tool_calls:
+                    if (
+                        not content_seen
+                        and not content
+                        and not reasoning_content
+                        and not tool_calls
+                    ):
                         print("AI: Error: No response choices returned from the API.\n")
                         break
 
@@ -152,7 +190,9 @@ class Agent:
                     if reasoning_content:
                         assistant_msg_dict["reasoning_content"] = reasoning_content
                     if tool_calls:
-                        assistant_msg_dict["tool_calls"] = [normalize_tool_call(tc) for tc in tool_calls]
+                        assistant_msg_dict["tool_calls"] = [
+                            normalize_tool_call(tc) for tc in tool_calls
+                        ]
                         tool_calls = assistant_msg_dict["tool_calls"]
 
                     self.messages.append(assistant_msg_dict)
@@ -166,7 +206,9 @@ class Agent:
                     # Non-streaming path (expected by test_agent.py)
                     if not response.choices:
                         if on_ai_reply:
-                            on_ai_reply("Error: No response choices returned from the API.")
+                            on_ai_reply(
+                                "Error: No response choices returned from the API."
+                            )
                         break
 
                     usage = response.usage
@@ -178,7 +220,9 @@ class Agent:
                         self.session_tokens["completion"] += c_tokens
                         self.session_tokens["total"] += t_tokens
                         if on_token_update:
-                            on_token_update(p_tokens, c_tokens, t_tokens, self.session_tokens)
+                            on_token_update(
+                                p_tokens, c_tokens, t_tokens, self.session_tokens
+                            )
 
                     assistant_msg_obj = response.choices[0].message
                     assistant_msg_dict = assistant_msg_obj.model_dump(exclude_none=True)
@@ -191,11 +235,17 @@ class Agent:
                             on_ai_reply(reply)
                         break
 
-                    tool_calls = [normalize_tool_call(tc) for tc in (assistant_msg_obj.tool_calls or [])]
+                    tool_calls = [
+                        normalize_tool_call(tc)
+                        for tc in (assistant_msg_obj.tool_calls or [])
+                    ]
 
             elif self.provider == "claude":
                 anthropic_messages = convert_messages_to_anthropic(self.messages)
-                system_prompt_text = next((m["content"] for m in self.messages if m["role"] == "system"), SYSTEM_PROMPT)
+                system_prompt_text = next(
+                    (m["content"] for m in self.messages if m["role"] == "system"),
+                    SYSTEM_PROMPT,
+                )
 
                 try:
                     response = self.client.messages.create(
@@ -237,7 +287,9 @@ class Agent:
                     self.session_tokens["completion"] += c_tokens
                     self.session_tokens["total"] += t_tokens
                     if on_token_update:
-                        on_token_update(p_tokens, c_tokens, t_tokens, self.session_tokens)
+                        on_token_update(
+                            p_tokens, c_tokens, t_tokens, self.session_tokens
+                        )
 
                 assistant_text = ""
                 tool_calls = []
@@ -245,14 +297,16 @@ class Agent:
                     if block.type == "text":
                         assistant_text += block.text
                     elif block.type == "tool_use":
-                        tool_calls.append({
-                            "id": block.id,
-                            "type": "function",
-                            "function": {
-                                "name": block.name,
-                                "arguments": json.dumps(block.input)
+                        tool_calls.append(
+                            {
+                                "id": block.id,
+                                "type": "function",
+                                "function": {
+                                    "name": block.name,
+                                    "arguments": json.dumps(block.input),
+                                },
                             }
-                        })
+                        )
 
                 assistant_msg = {"role": "assistant", "content": assistant_text}
                 if tool_calls:
@@ -269,18 +323,22 @@ class Agent:
                 name = tc["function"]["name"]
                 raw_args = tc["function"]["arguments"]
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    args = (
+                        json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    )
                     if not isinstance(args, dict):
                         raise ValueError("tool arguments must be a JSON object")
                 except (json.JSONDecodeError, ValueError) as e:
                     if on_tool_call:
                         on_tool_call(name, raw_args, error=str(e))
-                    self.messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc["id"],
-                        "name": name,
-                        "content": f"Error: invalid JSON arguments: {e}",
-                    })
+                    self.messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "name": name,
+                            "content": f"Error: invalid JSON arguments: {e}",
+                        }
+                    )
                     continue
 
                 if on_tool_call:
@@ -289,25 +347,35 @@ class Agent:
                 handler = TOOL_HANDLERS.get(name)
                 if handler is None:
                     result = f"Error: unknown tool '{name}'."
-                elif _requires_confirmation(name, args) and confirm_handler and not confirm_handler(name, args):
+                elif (
+                    _requires_confirmation(name, args)
+                    and confirm_handler
+                    and not confirm_handler(name, args)
+                ):
                     result = "Action declined by the user. Do not retry unless explicitly asked."
                 else:
                     try:
                         result = handler(args)
                     except KeyError as e:
-                        result = f"Error: missing required argument {e} for tool '{name}'."
+                        result = (
+                            f"Error: missing required argument {e} for tool '{name}'."
+                        )
                     except Exception as e:
                         result = f"Error executing '{name}': {e}"
 
                 if on_tool_result:
                     on_tool_result(name, result)
 
-                self.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "name": name,
-                    "content": result,
-                })
+                self.messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "name": name,
+                        "content": result,
+                    }
+                )
         else:
             if on_ai_reply:
-                on_ai_reply(f"stopped after reaching the max of {self.max_tool_steps} tool steps.")
+                on_ai_reply(
+                    f"stopped after reaching the max of {self.max_tool_steps} tool steps."
+                )

@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from main import run_bash
-import subprocess
+
 
 class TestRunBashEncoding(unittest.TestCase):
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_run_bash_handles_decoding_error(self, mock_run):
         # Simulate a situation where subprocess.run would raise UnicodeDecodeError
         # if errors='replace' wasn't used.
@@ -13,16 +13,14 @@ class TestRunBashEncoding(unittest.TestCase):
 
         # We want to verify that run_bash correctly passes errors='replace' to subprocess.run.
         mock_run.return_value = MagicMock(
-            stdout="output with replacement ",
-            stderr="",
-            returncode=0
+            stdout="output with replacement ", stderr="", returncode=0
         )
 
         result = run_bash("some command")
 
         # Check that subprocess.run was called with errors="replace"
         args, kwargs = mock_run.call_args
-        self.assertEqual(kwargs.get('errors'), 'replace')
+        self.assertEqual(kwargs.get("errors"), "replace")
         self.assertEqual(result, "output with replacement ")
 
     def test_real_decoding_replacement(self):
@@ -38,7 +36,8 @@ class TestRunBashEncoding(unittest.TestCase):
         # but the point is it shouldn't CRASH.
         self.assertTrue(len(result) > 0)
         # On most linux it will be \ufffd
-        self.assertIn('\ufffd', result)
+        self.assertIn("\ufffd", result)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

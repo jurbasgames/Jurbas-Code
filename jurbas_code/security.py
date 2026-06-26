@@ -104,7 +104,10 @@ def safe_path(file_path: str) -> str:
     try:
         allowed_norm = os.path.normcase(ALLOWED_BASE)
         full_norm = os.path.normcase(full)
-        if os.path.normcase(os.path.commonpath([allowed_norm, full_norm])) != allowed_norm:
+        if (
+            os.path.normcase(os.path.commonpath([allowed_norm, full_norm]))
+            != allowed_norm
+        ):
             raise PermissionError(f"Path not allowed: {file_path}")
     except ValueError:
         raise PermissionError(f"Path not allowed: {file_path}")
@@ -139,7 +142,7 @@ def load_dotenv(file_path: str = ".env") -> None:
             if not line or line.startswith("#"):
                 continue
             if line.startswith("export "):
-                line = line[len("export "):].strip()
+                line = line[len("export ") :].strip()
             if "=" not in line:
                 continue
             key, value = line.split("=", 1)
@@ -152,22 +155,38 @@ def load_dotenv(file_path: str = ".env") -> None:
 # ─── Dangerous command checks ───
 DANGEROUS_PATTERNS = [
     # Unix-style
-    "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .",
-    "mkfs", "dd if=", "fdisk",
+    "rm -rf /",
+    "rm -rf /*",
+    "rm -rf ~",
+    "rm -rf .",
+    "mkfs",
+    "dd if=",
+    "fdisk",
     ":(){ :|:& };:",
-    "chmod 000", "chown -R",
-    "> /dev/sda", "> /dev/sdb",
-    "wget ", "curl ",
-    "sudo ", "su ",
+    "chmod 000",
+    "chown -R",
+    "> /dev/sda",
+    "> /dev/sdb",
+    "wget ",
+    "curl ",
+    "sudo ",
+    "su ",
     # Windows-style
-    "del /f /s /q c:\\", "del /f /s /q c:/",
-    "format c:", "format c:/",
-    "rd /s /q c:\\", "rd /s /q c:/",
-    "rmdir /s /q c:\\", "rmdir /s /q c:/",
-    "cipher /w:c", "sfc /scannow",
+    "del /f /s /q c:\\",
+    "del /f /s /q c:/",
+    "format c:",
+    "format c:/",
+    "rd /s /q c:\\",
+    "rd /s /q c:/",
+    "rmdir /s /q c:\\",
+    "rmdir /s /q c:/",
+    "cipher /w:c",
+    "sfc /scannow",
     "reg delete",
-    "net user", "net localgroup",
-    "shutdown /", "taskkill /f",
+    "net user",
+    "net localgroup",
+    "shutdown /",
+    "taskkill /f",
 ]
 
 # On Windows 'format' is a built-in cmd command — keep the Windows-specific entry above
@@ -183,24 +202,59 @@ def _is_dangerous(command: str) -> str | None:
         if pattern in lower:
             return f"Command blocked for security reasons (matches dangerous pattern: '{pattern}')"
     # Block piping to any shell — covers Unix (sh/bash) and Windows (cmd/powershell/pwsh)
-    if re.search(r'\|\s*(sudo\s+)?([^|\s]*[\\/])?(sh|bash|cmd|powershell|pwsh)\b', lower):
+    if re.search(
+        r"\|\s*(sudo\s+)?([^|\s]*[\\/])?(sh|bash|cmd|powershell|pwsh)\b", lower
+    ):
         return "Piping to a shell interpreter is blocked for security."
     return None
 
 
 # ─── Readonly / mutation detection for Bash tool ───
 READONLY_BASH = {
-    "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "tree",
-    "stat", "file", "which", "whoami", "date", "echo", "env", "du", "df", "uname",
+    "ls",
+    "pwd",
+    "cat",
+    "head",
+    "tail",
+    "wc",
+    "grep",
+    "rg",
+    "tree",
+    "stat",
+    "file",
+    "which",
+    "whoami",
+    "date",
+    "echo",
+    "env",
+    "du",
+    "df",
+    "uname",
 }
 # Windows equivalents for read-only detection
 READONLY_CMD = {
-    "dir", "type", "echo", "date", "time", "ver", "whoami",
-    "where", "tree", "set", "path", "hostname",
+    "dir",
+    "type",
+    "echo",
+    "date",
+    "time",
+    "ver",
+    "whoami",
+    "where",
+    "tree",
+    "set",
+    "path",
+    "hostname",
 }
 READONLY_GIT_SUBCMDS = {
-    "status", "log", "diff", "show",
-    "ls-files", "rev-parse", "blame", "describe",
+    "status",
+    "log",
+    "diff",
+    "show",
+    "ls-files",
+    "rev-parse",
+    "blame",
+    "describe",
 }
 SHELL_OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(", "&")
 MUTATING_FLAGS = {"-d", "-D", "--delete", "-f", "--force", "--prune", "--hard"}
@@ -216,7 +270,12 @@ def _is_readonly_bash(command: str) -> bool:
     if not isinstance(command, str):
         return False
     cmd = command.strip()
-    if not cmd or any(op in cmd for op in SHELL_OPERATORS) or "\n" in cmd or "\r" in cmd:
+    if (
+        not cmd
+        or any(op in cmd for op in SHELL_OPERATORS)
+        or "\n" in cmd
+        or "\r" in cmd
+    ):
         return False
     tokens = cmd.split()
     if any(t in MUTATING_FLAGS for t in tokens):
@@ -228,7 +287,8 @@ def _is_readonly_bash(command: str) -> bool:
     # Use READONLY_BASH when a bash-compatible shell is active (even on Windows),
     # fall back to READONLY_CMD only when running plain cmd.exe.
     is_bash = not _IS_WINDOWS or (
-        _SHELL_EXECUTABLE is not None and "bash" in _SHELL_EXECUTABLE.lower())
+        _SHELL_EXECUTABLE is not None and "bash" in _SHELL_EXECUTABLE.lower()
+    )
     readonly_set = READONLY_BASH if is_bash else READONLY_CMD
     return head in readonly_set
 
@@ -253,8 +313,7 @@ def confirm_action(name: str, args) -> bool:
         print(f"      $ {args.get('command', '')}")
     elif name == "write_file":
         content = args.get("content", "")
-        print(
-            f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
+        print(f"      write_file: {args.get('file_path', '')} ({len(content)} chars)")
     else:
         print(f"      {name}: {args}")
     try:

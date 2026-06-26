@@ -1,25 +1,32 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 from unittest.mock import patch, MagicMock
 from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 import main
 
+
 @pytest.fixture(autouse=True)
 def mock_env():
-    with patch.dict(os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}):
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "sk-test"}
+    ):
         yield
 
-@patch('builtins.input', side_effect=['hello', 'exit'])
-@patch('openai.OpenAI')
+
+@patch("builtins.input", side_effect=["hello", "exit"])
+@patch("openai.OpenAI")
 def test_authentication_error(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
     mock_response = MagicMock()
     mock_response.request.url = "http://fake"
-    mock_client.chat.completions.create.side_effect = AuthenticationError("Auth error", response=mock_response, body=None)
+    mock_client.chat.completions.create.side_effect = AuthenticationError(
+        "Auth error", response=mock_response, body=None
+    )
 
     with pytest.raises(SystemExit):
         main.main()
@@ -27,52 +34,62 @@ def test_authentication_error(mock_openai, mock_input, capsys):
     captured = capsys.readouterr()
     assert "AI: Authentication Error:" in captured.out
 
-@patch('builtins.input', side_effect=['hello', 'exit'])
-@patch('openai.OpenAI')
+
+@patch("builtins.input", side_effect=["hello", "exit"])
+@patch("openai.OpenAI")
 def test_rate_limit_error(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
     mock_response = MagicMock()
     mock_response.request.url = "http://fake"
-    mock_client.chat.completions.create.side_effect = RateLimitError("Rate limit error", response=mock_response, body=None)
+    mock_client.chat.completions.create.side_effect = RateLimitError(
+        "Rate limit error", response=mock_response, body=None
+    )
 
     main.main()
 
     captured = capsys.readouterr()
     assert "AI: Rate Limit Error:" in captured.out
 
-@patch('builtins.input', side_effect=['hello', 'exit'])
-@patch('openai.OpenAI')
+
+@patch("builtins.input", side_effect=["hello", "exit"])
+@patch("openai.OpenAI")
 def test_timeout_error(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
     mock_request = MagicMock()
-    mock_client.chat.completions.create.side_effect = APITimeoutError(request=mock_request)
+    mock_client.chat.completions.create.side_effect = APITimeoutError(
+        request=mock_request
+    )
 
     main.main()
 
     captured = capsys.readouterr()
     assert "AI: Timeout Error:" in captured.out
 
-@patch('builtins.input', side_effect=['hello', 'exit'])
-@patch('openai.OpenAI')
+
+@patch("builtins.input", side_effect=["hello", "exit"])
+@patch("openai.OpenAI")
 def test_api_error(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
     mock_request = MagicMock()
     mock_request.url = "http://fake"
-    mock_client.chat.completions.create.side_effect = APIError("API error", request=mock_request, body=None)
+    mock_client.chat.completions.create.side_effect = APIError(
+        "API error", request=mock_request, body=None
+    )
 
     main.main()
 
     captured = capsys.readouterr()
     assert "AI: API Error:" in captured.out
 
-@patch('builtins.input', side_effect=['hello', 'exit'])
-@patch('openai.OpenAI')
+
+@patch("builtins.input", side_effect=["hello", "exit"])
+@patch("openai.OpenAI")
 def test_unexpected_error(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
@@ -84,8 +101,9 @@ def test_unexpected_error(mock_openai, mock_input, capsys):
     captured = capsys.readouterr()
     assert "AI: Unexpected Error:" in captured.out
 
-@patch('builtins.input', side_effect=['hello', 'exit'])
-@patch('openai.OpenAI')
+
+@patch("builtins.input", side_effect=["hello", "exit"])
+@patch("openai.OpenAI")
 def test_empty_choices(mock_openai, mock_input, capsys):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client

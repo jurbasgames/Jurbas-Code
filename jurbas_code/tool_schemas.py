@@ -11,7 +11,7 @@ tools = [
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "File path (e.g.: './main.py')."
+                        "description": "File path (e.g.: './main.py').",
                     }
                 },
                 "required": ["file_path"],
@@ -29,7 +29,7 @@ tools = [
                 "properties": {
                     "dir_path": {
                         "type": "string",
-                        "description": "Directory path (e.g.: './' for project root)."
+                        "description": "Directory path (e.g.: './' for project root).",
                     }
                 },
                 "required": ["dir_path"],
@@ -47,11 +47,11 @@ tools = [
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path of the file to be written (e.g.: './main.py')."
+                        "description": "Path of the file to be written (e.g.: './main.py').",
                     },
                     "content": {
                         "type": "string",
-                        "description": "Complete content to be written to the file."
+                        "description": "Complete content to be written to the file.",
                     },
                 },
                 "required": ["file_path", "content"],
@@ -69,7 +69,7 @@ tools = [
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "Shell command to execute (e.g.: 'git log --oneline -5')."
+                        "description": "Shell command to execute (e.g.: 'git log --oneline -5').",
                     }
                 },
                 "required": ["command"],
@@ -91,7 +91,7 @@ tools = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The search query (e.g.: 'Python asyncio tutorial')."
+                        "description": "The search query (e.g.: 'Python asyncio tutorial').",
                     },
                     "max_results": {
                         "type": "integer",

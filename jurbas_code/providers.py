@@ -27,9 +27,11 @@ CLAUDE_CODE_BETA_FLAGS = (
     "cache-diagnosis-2026-04-07",
 )
 
+
 def claude_config_dir() -> Path:
     override = os.environ.get("CLAUDE_CONFIG_DIR")
     return Path(override) if override else Path.home() / ".claude"
+
 
 def load_claude_code_token() -> str | None:
     creds_path = claude_config_dir() / ".credentials.json"
@@ -46,11 +48,16 @@ def load_claude_code_token() -> str | None:
         return None
     expires_at = oauth.get("expiresAt")
     if isinstance(expires_at, (int, float)) and expires_at / 1000 < time.time():
-        print("Warning: Claude Code token in ~/.claude appears expired. Run `claude` to renew the session.", file=sys.stderr)
+        print(
+            "Warning: Claude Code token in ~/.claude appears expired. Run `claude` to renew the session.",
+            file=sys.stderr,
+        )
     return token
+
 
 def resolve_claude_token() -> str | None:
     return os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or load_claude_code_token()
+
 
 def claude_code_headers() -> dict[str, str]:
     return {
@@ -71,19 +78,25 @@ def claude_code_headers() -> dict[str, str]:
         "x-client-request-id": str(uuid.uuid4()),
     }
 
+
 def get_claude_client() -> Any:
     if os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("ANTHROPIC_API_KEY esta setado; remova para evitar API billing.")
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY esta setado; remova para evitar API billing."
+        )
     import anthropic
+
     token = resolve_claude_token()
     if not token:
         raise RuntimeError("Nao encontrei credenciais do Claude Code.")
     return anthropic.Anthropic(auth_token=token, default_headers=claude_code_headers())
 
+
 def get_client(provider_name: str) -> Any:
     provider = provider_name.lower()
     if provider == "deepseek":
         from openai import OpenAI
+
         return OpenAI(
             api_key=os.environ.get("DEEPSEEK_API_KEY"),
             base_url="https://api.deepseek.com",
@@ -92,6 +105,7 @@ def get_client(provider_name: str) -> Any:
         return get_claude_client()
     else:
         raise ValueError(f"Unknown provider: {provider}. Use 'claude' or 'deepseek'.")
+
 
 def _listed_model_ids(client: Any) -> list[str]:
     models = getattr(client, "models", None)
@@ -102,10 +116,13 @@ def _listed_model_ids(client: Any) -> list[str]:
     items = getattr(response, "data", response)
     model_ids = []
     for item in items:
-        model_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        model_id = (
+            item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        )
         if isinstance(model_id, str) and model_id:
             model_ids.append(model_id)
     return model_ids
+
 
 def _env_model(provider: str) -> str | None:
     env_var = {
@@ -118,6 +135,7 @@ def _env_model(provider: str) -> str | None:
             return model
     model = os.environ.get("LLM_MODEL", "").strip()
     return model or None
+
 
 def resolve_provider_model(provider_name: str, client: Any) -> str:
     provider = provider_name.lower()
@@ -138,16 +156,23 @@ def resolve_provider_model(provider_name: str, client: Any) -> str:
         return default_model
     return model_ids[0] if model_ids else default_model
 
+
 # ─── Converters ───
-def convert_to_anthropic_tools(openai_tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def convert_to_anthropic_tools(
+    openai_tools: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     anthropic_tools = []
     for t in openai_tools:
         function = t.get("function", {})
-        anthropic_tools.append({
-            "name": function.get("name"),
-            "description": function.get("description", ""),
-            "input_schema": function.get("parameters", {"type": "object", "properties": {}}),
-        })
+        anthropic_tools.append(
+            {
+                "name": function.get("name"),
+                "description": function.get("description", ""),
+                "input_schema": function.get(
+                    "parameters", {"type": "object", "properties": {}}
+                ),
+            }
+        )
     return anthropic_tools
 
 
@@ -162,7 +187,9 @@ def _parse_tool_arguments(raw: Any) -> dict[str, Any]:
         return {}
 
 
-def convert_messages_to_anthropic(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def convert_messages_to_anthropic(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     anthropic_msgs = []
     for m in messages:
         if m["role"] == "system":
@@ -176,12 +203,14 @@ def convert_messages_to_anthropic(messages: list[dict[str, Any]]) -> list[dict[s
             if m.get("tool_calls"):
                 for tc in m["tool_calls"]:
                     function = tc.get("function", {})
-                    content.append({
-                        "type": "tool_use",
-                        "id": tc.get("id"),
-                        "name": function.get("name"),
-                        "input": _parse_tool_arguments(function.get("arguments")),
-                    })
+                    content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.get("id"),
+                            "name": function.get("name"),
+                            "input": _parse_tool_arguments(function.get("arguments")),
+                        }
+                    )
             if content:
                 anthropic_msgs.append({"role": "assistant", "content": content})
         elif m["role"] == "tool":
@@ -193,11 +222,14 @@ def convert_messages_to_anthropic(messages: list[dict[str, Any]]) -> list[dict[s
             }
             if last_msg and last_msg["role"] == "user":
                 if isinstance(last_msg["content"], str):
-                    last_msg["content"] = [{"type": "text", "text": last_msg["content"]}]
+                    last_msg["content"] = [
+                        {"type": "text", "text": last_msg["content"]}
+                    ]
                 last_msg["content"].append(block)
             else:
                 anthropic_msgs.append({"role": "user", "content": [block]})
     return anthropic_msgs
+
 
 def normalize_tool_call(tool_call: Any) -> dict[str, Any]:
     """Return a plain dict for tool calls from either OpenAI/DeepSeek or Anthropic."""
@@ -209,7 +241,11 @@ def normalize_tool_call(tool_call: Any) -> dict[str, Any]:
         "id": getattr(tool_call, "id", None),
         "type": getattr(tool_call, "type", "function"),
         "function": {
-            "name": function.get("name") if function_is_dict else getattr(function, "name", None),
-            "arguments": function.get("arguments", "{}") if function_is_dict else getattr(function, "arguments", "{}"),
+            "name": function.get("name")
+            if function_is_dict
+            else getattr(function, "name", None),
+            "arguments": function.get("arguments", "{}")
+            if function_is_dict
+            else getattr(function, "arguments", "{}"),
         },
     }

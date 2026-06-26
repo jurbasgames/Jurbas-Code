@@ -44,17 +44,13 @@ from jurbas_code.tools import (  # noqa: F401
 )
 
 from jurbas_code.providers import (
-    CLAUDE_CODE_IDENTITY,
-    convert_messages_to_anthropic,
-    convert_to_anthropic_tools,
     get_client,
-    normalize_tool_call,
 )
 
-from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
 from jurbas_code.agent import Agent
 
 HISTORY_FILE = "history.json"
+
 
 def load_history() -> list:
     """Loads message history from file, syncing with the current SYSTEM_PROMPT."""
@@ -84,8 +80,12 @@ def save_history(messages: list):
     except Exception as e:
         print(f"Error saving history: {e}")
 
+
 def on_token_update(p_tokens, c_tokens, t_tokens, session_tokens):
-    print(f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)")
+    print(
+        f"  [Tokens] Request: {p_tokens}p / {c_tokens}c ({t_tokens} total) | Session: {session_tokens['prompt']}p / {session_tokens['completion']}c ({session_tokens['total']} total)"
+    )
+
 
 def on_tool_call(name, args, error=None):
     if error:
@@ -93,8 +93,10 @@ def on_tool_call(name, args, error=None):
     else:
         print(f"  🔧 [{name}] {args}")
 
+
 def on_ai_reply(reply):
     print(f"AI: {reply}\n")
+
 
 def main(args=None):
     parser = argparse.ArgumentParser(
@@ -103,13 +105,14 @@ def main(args=None):
     parser.add_argument(
         "--clear-history",
         action="store_true",
-        help="Clear the session history and exit."
+        help="Clear the session history and exit.",
     )
     parser.add_argument(
-        "--version", "-v",
+        "--version",
+        "-v",
         action="version",
         version=f"Jurbas-Code v{__version__}",
-        help="Show the program version and exit."
+        help="Show the program version and exit.",
     )
     parsed_args = parser.parse_args([] if args is None else args)
 
@@ -122,13 +125,15 @@ def main(args=None):
         return
 
     load_dotenv()
-    
+
     provider = os.environ.get("LLM_PROVIDER", "claude").lower()
-    
+
     if provider == "deepseek":
         api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
         if not api_key:
-            print("Error: DEEPSEEK_API_KEY environment variable is not set or is empty.")
+            print(
+                "Error: DEEPSEEK_API_KEY environment variable is not set or is empty."
+            )
             sys.exit(1)
 
     try:
@@ -157,9 +162,10 @@ def main(args=None):
             on_token_update=on_token_update,
             on_tool_call=on_tool_call,
             on_ai_reply=on_ai_reply,
-            confirm_handler=confirm_action
+            confirm_handler=confirm_action,
         )
         save_history(agent.messages)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":

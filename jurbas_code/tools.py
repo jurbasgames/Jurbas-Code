@@ -8,21 +8,19 @@ from jurbas_code.security import (
     ALLOWED_BASE,
     safe_path,
     is_secret_path,
-    load_dotenv,
     _is_dangerous,
-    _is_readonly_bash,
-    _requires_confirmation,
-    confirm_action,
 )
 
 DDGS = None
 try:
     from ddgs import DDGS as _DDGS
+
     DDGS = _DDGS
     HAS_WEB_SEARCH = True
 except ImportError:
     try:
         from duckduckgo_search import DDGS as _DDGS
+
         DDGS = _DDGS
         HAS_WEB_SEARCH = True
     except ImportError:
@@ -105,7 +103,9 @@ def write_file(file_path: str, content: str) -> str:
         if os.path.exists(full):
             backup = full + ".bak"
             shutil.copy2(full, backup)
-            backup_note = f" (previous version backed up to '{os.path.basename(backup)}')"
+            backup_note = (
+                f" (previous version backed up to '{os.path.basename(backup)}')"
+            )
         with open(full, "w", encoding="utf-8") as f:
             f.write(content)
         size = os.path.getsize(full)
@@ -164,6 +164,7 @@ shell_health = ShellHealth()
 
 def run_bash(command: str) -> str:
     from jurbas_code.security import _SHELL_EXECUTABLE
+
     if not isinstance(command, str):
         return "Error: command must be a string."
     reason = _is_dangerous(command)
@@ -179,7 +180,9 @@ def run_bash(command: str) -> str:
             stdin=subprocess.DEVNULL,
         )
         if _SHELL_EXECUTABLE:
-            result = subprocess.run([_SHELL_EXECUTABLE, "-c", command], shell=False, **kwargs)
+            result = subprocess.run(
+                [_SHELL_EXECUTABLE, "-c", command], shell=False, **kwargs
+            )
         else:
             result = subprocess.run(command, shell=True, **kwargs)
 
@@ -205,6 +208,7 @@ def run_bash(command: str) -> str:
         return output
     except FileNotFoundError:
         from jurbas_code.security import _IS_WINDOWS
+
         shell_name = "cmd.exe" if _IS_WINDOWS else (_SHELL_EXECUTABLE or "shell")
         return f"Error: shell ({shell_name}) not found."
     except subprocess.TimeoutExpired:
