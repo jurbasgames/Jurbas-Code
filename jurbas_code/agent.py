@@ -38,40 +38,13 @@ class Agent:
         self.session_model: str | None = None
 
     def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
-        parts = user_input.split() if user_input else []
-        if parts and parts[0] == "/model":
-            current_model = self.session_model or resolve_provider_model(self.provider, self.client)
-
-            if len(parts) == 1:
-                try:
-                    models = _listed_model_ids(self.client)
-                except Exception:
-                    models = []
-                reply = f"Current model: {current_model}\nAvailable models for '{self.provider}': "
-                reply += ", ".join(models) if models else "Unknown (API unavailable)"
-                if on_ai_reply:
-                    on_ai_reply(reply)
-                return
-
-            arg = " ".join(parts[1:]).strip()
-
-            if arg in ("claude", "deepseek"):
-                try:
-                    temp_client = get_client(arg)
-                    models = _listed_model_ids(temp_client)
-                    reply = f"Available models for '{arg}': " + (", ".join(models) if models else "Unknown (API unavailable)")
-                except Exception as e:
-                    reply = f"Error fetching models for '{arg}': {e}"
-                if on_ai_reply:
-                    on_ai_reply(reply)
-                return
-
-            self.session_model = arg
-            if on_ai_reply:
-                on_ai_reply(f"Session model switched to: {arg}")
-            return
-
         if user_input:
+            if user_input.startswith("/"):
+                from jurbas_code.commands import handle_command
+                result = handle_command(self, user_input)
+                if on_ai_reply:
+                    on_ai_reply(result)
+                return
             self.messages.append({"role": "user", "content": user_input})
 
         model = self.session_model or resolve_provider_model(self.provider, self.client)

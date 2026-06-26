@@ -15,8 +15,8 @@ def mock_client():
     client.models = models_mock
     return client
 
-@patch("jurbas_code.agent._listed_model_ids")
-@patch("jurbas_code.agent.resolve_provider_model")
+@patch("jurbas_code.providers._listed_model_ids")
+@patch("jurbas_code.providers.resolve_provider_model")
 def test_model_no_args_shows_available(mock_resolve, mock_listed, mock_client):
     mock_resolve.return_value = "default-model"
     mock_listed.return_value = ["model-a", "model-b"]
@@ -34,8 +34,8 @@ def test_model_no_args_shows_available(mock_resolve, mock_listed, mock_client):
     # Check that no messages were added to context for a slash command
     assert len(agent.messages) == 1 # Just system prompt
 
-@patch("jurbas_code.agent.get_client")
-@patch("jurbas_code.agent._listed_model_ids")
+@patch("jurbas_code.providers.get_client")
+@patch("jurbas_code.providers._listed_model_ids")
 def test_model_provider_arg_lists_provider_models(mock_listed, mock_get_client, mock_client):
     temp_client = MagicMock()
     mock_get_client.return_value = temp_client
@@ -61,8 +61,8 @@ def test_model_switch_model(mock_client):
     assert "Session model switched to: deepseek-v4-pro" in replies[0]
     assert agent.session_model == "deepseek-v4-pro"
 
-@patch("jurbas_code.agent._listed_model_ids")
-@patch("jurbas_code.agent.resolve_provider_model")
+@patch("jurbas_code.providers._listed_model_ids")
+@patch("jurbas_code.providers.resolve_provider_model")
 def test_model_api_failure_fallback(mock_resolve, mock_listed, mock_client):
     mock_resolve.return_value = "default-model"
     mock_listed.side_effect = Exception("API down")
