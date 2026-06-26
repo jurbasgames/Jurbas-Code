@@ -109,16 +109,19 @@ class JurbasTUI(App):
         self.query_one(InputBar).focus()
 
     def on_input_bar_submitted(self, message: InputBar.Submitted) -> None:
-        if message.text.lower() in ("/quit", "/exit"):
+        text = message.text.strip()
+        if text.lower() in ("/quit", "/exit"):
             self.exit()
             return
 
-        chat_view = self.query_one(ChatView)
-        ui_msg = chat_view.add_message("user", message.text)
-        ui_msg.border_title = "User"
+        is_slash_command = text.startswith("/")
+        if not is_slash_command:
+            chat_view = self.query_one(ChatView)
+            ui_msg = chat_view.add_message("user", text)
+            ui_msg.border_title = "User"
 
         self.query_one(StatusBar).is_thinking = True
-        self.run_agent(message.text)
+        self.run_agent(text)
 
     @work(thread=True)
     def run_agent(self, user_input: str) -> None:
@@ -161,6 +164,11 @@ class JurbasTUI(App):
 
         def on_ai_reply(reply):
             nonlocal current_ai_msg, current_ai_text
+
+            if getattr(self.agent, "session_model", None):
+                new_label = f"{self.agent.provider} ({self.agent.session_model})"
+                self.call_from_thread(setattr, status_bar, "provider_model", new_label)
+
             if not current_ai_msg:
                 def add_msg():
                     nonlocal current_ai_msg

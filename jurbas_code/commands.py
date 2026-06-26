@@ -45,11 +45,39 @@ def cmd_version(agent, args):
     from jurbas_code import __version__
     return f"Jurbas-Code version: {__version__}"
 
+def cmd_model(agent, args):
+    """List available models or switch session model (/model <provider|model>)."""
+    from jurbas_code.providers import resolve_provider_model, _listed_model_ids, get_client
+
+    current_model = agent.session_model or resolve_provider_model(agent.provider, agent.client)
+
+    if not args:
+        try:
+            models = _listed_model_ids(agent.client)
+        except Exception:
+            models = []
+        reply = f"Current model: {current_model}\nAvailable models for '{agent.provider}': "
+        reply += ", ".join(models) if models else "Unknown (API unavailable)"
+        return reply
+
+    arg = args.strip()
+    if arg in ("claude", "deepseek"):
+        try:
+            temp_client = get_client(arg)
+            models = _listed_model_ids(temp_client)
+            return f"Available models for '{arg}': " + (", ".join(models) if models else "Unknown (API unavailable)")
+        except Exception as e:
+            return f"Error fetching models for '{arg}': {e}"
+
+    agent.session_model = arg
+    return f"Session model switched to: {arg}"
+
 COMMAND_HANDLERS = {
     "/help": cmd_help,
     "/status": cmd_status,
     "/clear": cmd_clear,
     "/version": cmd_version,
+    "/model": cmd_model,
 }
 
 def handle_command(agent, user_input: str) -> str:

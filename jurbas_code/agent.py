@@ -35,6 +35,7 @@ class Agent:
         self.tools = tools
         self.max_tool_steps = max_tool_steps
         self.session_tokens = {"prompt": 0, "completion": 0, "total": 0}
+        self.session_model: str | None = None
 
     def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
         if user_input:
@@ -45,7 +46,8 @@ class Agent:
                     on_ai_reply(result)
                 return
             self.messages.append({"role": "user", "content": user_input})
-        model = resolve_provider_model(self.provider, self.client)
+
+        model = self.session_model or resolve_provider_model(self.provider, self.client)
 
         for _step in range(self.max_tool_steps):
             if self.provider == "deepseek":
