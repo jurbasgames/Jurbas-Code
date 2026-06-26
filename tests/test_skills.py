@@ -32,6 +32,12 @@ def test_parse_frontmatter_no_frontmatter():
     assert metadata == {}
     assert body == content
 
+def test_parse_frontmatter_unclosed():
+    content = "---\nname: oops\n# Missing closing marker\nHello"
+    metadata, body = _parse_frontmatter(content)
+    assert metadata == {}
+    assert body == content
+
 def test_skills_load_missing_dir():
     # Clear registry first
     _SKILLS_REGISTRY.clear()

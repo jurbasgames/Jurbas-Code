@@ -27,11 +27,14 @@ def _parse_frontmatter(content: str) -> tuple[dict, str]:
         if ":" in line:
             key, val = line.split(":", 1)
             metadata[key.strip()] = val.strip()
+    else:
+        # Closing --- not found — treat entire content as body
+        return {}, content
 
     body = "\n".join(lines[body_start_idx:])
     return metadata, body
 
-def skills_load(skills_dir: str = "~/.hermes/skills/") -> None:
+def skills_load(skills_dir: str = "~/.jurbas/skills/") -> None:
     """Scan and load all .md files in the skills directory."""
     global _SKILLS_REGISTRY
     _SKILLS_REGISTRY.clear()
@@ -41,9 +44,9 @@ def skills_load(skills_dir: str = "~/.hermes/skills/") -> None:
         return
 
     search_pattern = os.path.join(expanded_dir, "*.md")
-    for file_path in glob.glob(search_pattern):
+    for file_path in sorted(glob.glob(search_pattern)):
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8-sig") as f:
                 content = f.read()
 
             metadata, body = _parse_frontmatter(content)
