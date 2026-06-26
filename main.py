@@ -118,6 +118,16 @@ def main(args=None):
         action="store_true",
         help="Run Jurbas-Code as a Telegram Bot gateway."
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Run Jurbas-Code using the Textual terminal UI (default)."
+    )
+    parser.add_argument(
+        "--no-tui",
+        action="store_true",
+        help="Force legacy CLI even if Textual TUI is available."
+    )
     parsed_args = parser.parse_args([] if args is None else args)
 
     if parsed_args.clear_history:
@@ -153,8 +163,6 @@ def main(args=None):
 
         def agent_factory():
             a = Agent(client, provider)
-            # Starting each telegram conversation with the system prompt, but not loading the local history.json
-            # to prevent multiple chat threads from bleeding into each other.
             a.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             return a
 
@@ -166,6 +174,29 @@ def main(args=None):
     skills_load()
     agent = Agent(client, provider)
     agent.messages = load_history()
+
+    if parsed_args.no_tui:
+        use_tui = False
+    elif parsed_args.tui:
+        use_tui = True
+    elif os.environ.get("JURBAS_TUI") == "0":
+        use_tui = False
+    elif os.environ.get("JURBAS_TUI") == "1":
+        use_tui = True
+    else:
+        use_tui = True  # default: try TUI, fallback to CLI
+    if use_tui:
+        try:
+            from jurbas_code.tui.app import JurbasTUI
+            app = JurbasTUI(agent=agent)
+            app.run()
+            save_history(agent.messages)
+            return
+        except ImportError:
+            print("TUI dependencies not installed. Falling back to legacy CLI.")
+            print("Tip: uv pip install -e .[tui]")
+        except Exception as e:
+            print(f"TUI failed ({e}). Falling back to legacy CLI.")
 
     print(f"Jurbas-Code v{__version__}")
 
