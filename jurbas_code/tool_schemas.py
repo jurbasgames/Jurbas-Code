@@ -104,4 +104,34 @@ tools = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "skills_list",
+            "description": "Lists available loaded skills and their descriptions.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skills_get",
+            "description": "Retrieves the full content of a specific skill by its name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the skill to retrieve."
+                    }
+                },
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]

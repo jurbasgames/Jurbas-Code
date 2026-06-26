@@ -5,6 +5,7 @@ import platform
 import re
 import shutil
 import subprocess
+from jurbas_code.audit import audit_logger
 
 # ─── Allowed base directory (anchored relative to this file's parent) ───
 ALLOWED_BASE = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
@@ -261,4 +262,9 @@ def confirm_action(name: str, args) -> bool:
         answer = input("  Approve? [y/N] ").strip().lower()
     except EOFError:
         answer = "n"
-    return answer in ("y", "yes")
+    approved = answer in ("y", "yes")
+    audit_logger.log_action("user_confirmation", {
+        "action": name,
+        "approved": approved
+    })
+    return approved
