@@ -28,4 +28,4 @@ dev = [
 ]
 
 [project.scripts]
-jurbas = "main:main"
+jurbas = "jurbas_code.main:main"
