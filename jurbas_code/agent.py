@@ -1,7 +1,8 @@
 import json
 import os
 import sys
-import anthropic
+from typing import Any, Callable, Optional
+import anthropic  # type: ignore[import-not-found]
 
 from jurbas_code.security import (
     ALLOWED_BASE,
@@ -21,21 +22,31 @@ from jurbas_code.providers import (
     convert_to_anthropic_tools,
     normalize_tool_call,
     resolve_provider_model,
+    Message,
+    ToolCall,
 )
 
-from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError
+from openai import AuthenticationError, APIError, RateLimitError, APITimeoutError  # type: ignore[import-not-found]
 
 
 class Agent:
-    def __init__(self, client, provider, system_prompt=SYSTEM_PROMPT, tools=TOOLS_SCHEMA, max_tool_steps=MAX_TOOL_STEPS):
+    def __init__(self, client: Any, provider: str, system_prompt: str = SYSTEM_PROMPT, tools: list[dict[str, Any]] = TOOLS_SCHEMA, max_tool_steps: int = MAX_TOOL_STEPS) -> None:
         self.client = client
         self.provider = provider
-        self.messages = [{"role": "system", "content": system_prompt}]
+        self.messages: list[Message] = [{"role": "system", "content": system_prompt}]
         self.tools = tools
         self.max_tool_steps = max_tool_steps
         self.session_tokens = {"prompt": 0, "completion": 0, "total": 0}
 
-    def chat(self, user_input, on_token_update=None, on_tool_call=None, on_tool_result=None, on_ai_reply=None, confirm_handler=None):
+    def chat(
+        self,
+        user_input: str,
+        on_token_update: Optional[Callable[[int, int, int, dict[str, int]], None]] = None,
+        on_tool_call: Optional[Callable[..., None]] = None,
+        on_tool_result: Optional[Callable[[str, Any], None]] = None,
+        on_ai_reply: Optional[Callable[[str], None]] = None,
+        confirm_handler: Optional[Callable[[str, dict[str, Any]], bool]] = None,
+    ) -> None:
         self.messages.append({"role": "user", "content": user_input})
         model = resolve_provider_model(self.provider, self.client)
 
@@ -81,7 +92,7 @@ class Agent:
                     content = ""
                     content_seen = False
                     reasoning_content = ""
-                    tool_calls = []
+                    tool_calls: list[ToolCall] = []
                     printed_ai_prefix = False
 
                     try:
@@ -147,7 +158,7 @@ class Agent:
                         print("AI: Error: No response choices returned from the API.\n")
                         break
 
-                    assistant_msg_dict = {"role": role}
+                    assistant_msg_dict: Message = {"role": role}
                     if content_seen or content or tool_calls:
                         assistant_msg_dict["content"] = content
                     if reasoning_content:
@@ -255,7 +266,7 @@ class Agent:
                             }
                         })
 
-                assistant_msg = {"role": "assistant", "content": assistant_text}
+                assistant_msg: Message = {"role": "assistant", "content": assistant_text}
                 if tool_calls:
                     assistant_msg["tool_calls"] = tool_calls
                 self.messages.append(assistant_msg)
