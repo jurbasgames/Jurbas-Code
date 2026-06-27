@@ -1,9 +1,19 @@
 [project]
 name = "jurbas-code"
 version = "0.1.0"
-description = "Add your description here"
+description = "An AI terminal agent with streaming support and multiple LLM providers."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Jurbas Contributors"},
+]
+keywords = ["ai", "agent", "terminal", "claude", "deepseek"]
+classifiers = [
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
 env-file = ".env"
 dependencies = [
     "anthropic>=0.92.0",
@@ -16,3 +26,6 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
 ]
+
+[project.scripts]
+jurbas = "jurbas_code.main:main"
